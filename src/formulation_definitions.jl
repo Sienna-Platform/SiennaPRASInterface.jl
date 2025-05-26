@@ -16,7 +16,7 @@ PRAS formulation subtypes for specific PRAS types
 abstract type AbstractRAFormulation end
 
 """
-    GeneratorPRAS(; max_active_power, lump_renewable_generation) <: AbstractRAFormulation
+    GeneratorPRAS(; max_active_power, outage_probability, recovery_probability, lump_renewable_generation) <: AbstractRAFormulation
 
 # Arguments
 $(TYPEDFIELDS)
@@ -26,14 +26,25 @@ GeneratorPRAS produces generator entries in PRAS.
 struct GeneratorPRAS <: AbstractRAFormulation
     "Name of time series to use for max active power"
     max_active_power::String
+    "Name of time series to use for outage_probability"
+    outage_probability::String
+    "Name of time series to use for recovery_probability"
+    recovery_probability::String
     "Whether to lump renewable generation to regions"
     lump_renewable_generation::Bool
 
     function GeneratorPRAS(;
         max_active_power="max_active_power",
+        outage_probability="outage_probability",
+        recovery_probability="recovery_probability",
         lump_renewable_generation=false,
     )
-        return new(max_active_power, lump_renewable_generation)
+        return new(
+            max_active_power,
+            outage_probability,
+            recovery_probability,
+            lump_renewable_generation,
+        )
     end
 end
 
@@ -42,6 +53,20 @@ Get max active power time series name
 """
 function get_max_active_power(f::GeneratorPRAS)
     return f.max_active_power
+end
+
+"""
+Get outage_probability time series name
+"""
+function get_outage_probability(f::GeneratorPRAS)
+    return f.outage_probability
+end
+
+"""
+Get recovery_probability time series name
+"""
+function get_recovery_probability(f::GeneratorPRAS)
+    return f.recovery_probability
 end
 
 """
@@ -74,9 +99,17 @@ HybridSystemPRAS produces generatorstorage entries in PRAS.
 struct HybridSystemPRAS <: GeneratorStoragePRAS
     "Name of time series to use for max active power"
     max_active_power::String
+    "Name of time series to use for outage_probability"
+    outage_probability::String
+    "Name of time series to use for recovery_probability"
+    recovery_probability::String
 
-    function HybridSystemPRAS(; max_active_power="max_active_power")
-        return new(max_active_power)
+    function HybridSystemPRAS(;
+        max_active_power="max_active_power",
+        outage_probability="outage_probability",
+        recovery_probability="recovery_probability",
+    )
+        return new(max_active_power, outage_probability, recovery_probability)
     end
 end
 
@@ -85,6 +118,20 @@ Get max active power time series name
 """
 function get_max_active_power(f::HybridSystemPRAS)
     return f.max_active_power
+end
+
+"""
+Get outage_probability time series name
+"""
+function get_outage_probability(f::HybridSystemPRAS)
+    return f.outage_probability
+end
+
+"""
+Get recovery_probability time series name
+"""
+function get_recovery_probability(f::HybridSystemPRAS)
+    return f.recovery_probability
 end
 
 """
@@ -100,13 +147,25 @@ struct HydroEnergyReservoirPRAS <: GeneratorStoragePRAS
     inflow::String
     "Name of time series to use for storage capacity"
     storage_capacity::String
+    "Name of time series to use for outage_probability"
+    outage_probability::String
+    "Name of time series to use for recovery_probability"
+    recovery_probability::String
 
     function HydroEnergyReservoirPRAS(;
         max_active_power="max_active_power",
         inflow="inflow",
         storage_capacity="storage_capacity",
+        outage_probability="outage_probability",
+        recovery_probability="recovery_probability",
     )
-        return new(max_active_power, inflow, storage_capacity)
+        return new(
+            max_active_power,
+            inflow,
+            storage_capacity,
+            outage_probability,
+            recovery_probability,
+        )
     end
 end
 
@@ -129,6 +188,20 @@ Get storage capacity time series name
 """
 function get_storage_capacity(f::HydroEnergyReservoirPRAS)
     return f.storage_capacity
+end
+
+"""
+Get outage_probability time series name
+"""
+function get_outage_probability(f::HydroEnergyReservoirPRAS)
+    return f.outage_probability
+end
+
+"""
+Get recovery_probability time series name
+"""
+function get_recovery_probability(f::HydroEnergyReservoirPRAS)
+    return f.recovery_probability
 end
 
 """
@@ -321,7 +394,8 @@ template = RATemplate(
     [
         DeviceRAModel(
             PSY.Generator,
-            GeneratorPRAS(max_active_power="max_active_power"),
+            GeneratorPRAS(max_active_power="max_active_power", outage_probability = "outage_probability",
+            recovery_probability = "recovery_probability"),
         ),
         DeviceRAModel(
             PSY.HydroEnergyReservoir,
@@ -329,6 +403,8 @@ template = RATemplate(
                 max_active_power="max_active_power",
                 inflow="inflow",
                 storage_capacity="storage_capacity",
+                outage_probability = "outage_probability",
+                recovery_probability = "recovery_probability"
             ),
         ),
     ],

@@ -337,7 +337,7 @@ function process_generators(
             end
         end
 
-        λ_gen[idx, :], μ_gen[idx, :] = get_outage_time_series_data(g, s2p_meta)
+        λ_gen[idx, :], μ_gen[idx, :] = get_outage_time_series_data(g, s2p_meta, component_to_formulation[g])
     end
 
     return PRASCore.Generators{
@@ -578,7 +578,7 @@ function process_genstorage(
             view(gen_stor_gridinj_cap_array, idx, :),
         )
 
-        λ_genstors[idx, :], μ_genstors[idx, :] = get_outage_time_series_data(g_s, s2p_meta)
+        λ_genstors[idx, :], μ_genstors[idx, :] = get_outage_time_series_data(g_s, s2p_meta, component_to_formulation[g_s])
     end
 
     gen_stor_gridwdr_cap_array = zeros(Int64, n_genstors, s2p_meta.N) # Not currently available/ defined in PowerSystems

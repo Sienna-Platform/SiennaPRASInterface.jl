@@ -113,6 +113,10 @@ include("util/definitions.jl")
 include("util/runchecks.jl")
 
 include("util/parsing/Sienna_PRAS_metadata.jl")
+
+include("formulation_definitions.jl")
+include("PowerSystems2PRAS.jl")
+
 include("util/parsing/lines_and_interfaces.jl")
 include("util/parsing/outage_data_helper_functions.jl")
 include("util/parsing/PRAS_export.jl")
@@ -121,9 +125,6 @@ include("util/sienna/helper_functions.jl")
 
 include("util/draws/draw_helper_functions.jl")
 include("util/draws/sienna_draws.jl")
-
-include("formulation_definitions.jl")
-include("PowerSystems2PRAS.jl")
 
 include("util/parsing/result_export_helper_functions.jl")
 include("PRAS2PowerSystems.jl")

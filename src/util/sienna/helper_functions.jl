@@ -146,6 +146,28 @@ end
 function get_outage_time_series_data(
     gen::Union{PSY.StaticInjection, PSY.Branch},
     s2p_meta::S2P_metadata,
+    formulation::GeneratorPRAS
+)
+ return get_outage_time_series_data(gen, s2p_meta, 
+ outage_probability_ts_name = get_outage_probability(formulation), 
+ recovery_probability_ts_name = get_recovery_probability(formulation) )
+end
+
+function get_outage_time_series_data(
+    gen::Union{PSY.StaticInjection, PSY.Branch},
+    s2p_meta::S2P_metadata,
+    formulation::GeneratorStoragePRAS
+)
+ return get_outage_time_series_data(gen, s2p_meta, 
+ outage_probability_ts_name = get_outage_probability(formulation), 
+ recovery_probability_ts_name = get_recovery_probability(formulation))
+end
+
+function get_outage_time_series_data(
+    gen::Union{PSY.StaticInjection, PSY.Branch},
+    s2p_meta::S2P_metadata;
+    outage_probability_ts_name = "outage_probability",
+    recovery_probability_ts_name = "recovery_probability"
 )
     # Get GeometricForcedOutage SupplementalAttribute of the generator g
     outage_sup_attrs =
@@ -159,7 +181,15 @@ function get_outage_time_series_data(
             1 / PSY.get_mean_time_to_recovery(transition_data)
         end
 
-        if (PSY.has_time_series(transition_data, PSY.SingleTimeSeries))
+        if (PSY.has_time_series(
+            transition_data,
+            PSY.SingleTimeSeries,
+            outage_probability_ts_name,
+            ) && PSY.has_time_series(
+                transition_data,
+                PSY.SingleTimeSeries,
+                recovery_probability_ts_name,
+            ))
             return PSY.get_time_series_values(
                 PSY.SingleTimeSeries,
                 transition_data,

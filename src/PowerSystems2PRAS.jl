@@ -337,8 +337,11 @@ function process_generators(
             end
         end
 
-        λ_gen[idx, :], μ_gen[idx, :] =
+        λ_gen[idx, :], μ_gen[idx, :] = if haskey(lumped_mapping, g.name)
+            get_outage_time_series_data(g, s2p_meta)
+        else
             get_outage_time_series_data(g, s2p_meta, component_to_formulation[g])
+        end
     end
 
     return PRASCore.Generators{

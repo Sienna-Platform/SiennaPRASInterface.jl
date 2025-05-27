@@ -32,15 +32,27 @@ keys_to_names(
             ),
             SiennaPRASInterface.DeviceRAModel(
                 PSY.ThermalGen,
-                SiennaPRASInterface.GeneratorPRAS(max_active_power="max_active_POWER"),
+                SiennaPRASInterface.GeneratorPRAS(
+                    max_active_power="max_active_POWER",
+                    outage_probability="outage_probability",
+                    recovery_probability="recovery_probability",
+                ),
             ),
             SiennaPRASInterface.DeviceRAModel(
                 PSY.HydroDispatch,
-                SiennaPRASInterface.GeneratorPRAS(max_active_power="max_active_POWER"),
+                SiennaPRASInterface.GeneratorPRAS(
+                    max_active_power="max_active_POWER",
+                    outage_probability="outage_probability",
+                    recovery_probability="recovery_probability",
+                ),
             ),
             SiennaPRASInterface.DeviceRAModel(
                 PSY.RenewableGen,
-                SiennaPRASInterface.GeneratorPRAS(max_active_power="max_active_POWER"),
+                SiennaPRASInterface.GeneratorPRAS(
+                    max_active_power="max_active_POWER",
+                    outage_probability="outage_probability",
+                    recovery_probability="recovery_probability",
+                ),
             ),
             SiennaPRASInterface.DeviceRAModel(
                 PSY.EnergyReservoirStorage,
@@ -48,7 +60,10 @@ keys_to_names(
             ),
             SiennaPRASInterface.DeviceRAModel(
                 PSY.HydroEnergyReservoir,
-                SiennaPRASInterface.HydroEnergyReservoirPRAS(),
+                SiennaPRASInterface.HydroEnergyReservoirPRAS(
+                    outage_probability="outage_probability",
+                    recovery_probability="recovery_probability",
+                ),
             ),
         ],
     )

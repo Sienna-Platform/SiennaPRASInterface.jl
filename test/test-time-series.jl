@@ -1,55 +1,6 @@
 @testset "Test RTS-GMLC Time Series" begin
-    rts_da_sys = get_rts_gmlc_outage("DA")
-    rts_test_outage_ts_data = CSV.read(
-        joinpath(@__DIR__, "RTS_Test_Outage_Time_Series_Data.csv"),
-        DataFrames.DataFrame,
-    )
-
-    # Time series timestamps
-    filter_func = x -> (typeof(x) <: PSY.StaticTimeSeries)
-    all_ts = PSY.get_time_series_multiple(rts_da_sys, filter_func)
-    ts_timestamps = TimeSeries.timestamp(first(all_ts).data)
-    first_timestamp = first(ts_timestamps)
-
-    # Add λ and μ time series 
-    for row in DataFrames.eachrow(rts_test_outage_ts_data)
-        comp = PSY.get_component(PSY.Generator, rts_da_sys, row.Unit)
-        λ_vals = Float64[]
-        μ_vals = Float64[]
-        for i in range(0, length=12)
-            next_timestamp = first_timestamp + Dates.Month(i)
-            λ, μ = SiennaPRASInterface.rate_to_probability(row[3 + i], 48)
-            append!(λ_vals, fill(λ, (Dates.daysinmonth(next_timestamp) * 24)))
-            append!(μ_vals, fill(μ, (Dates.daysinmonth(next_timestamp) * 24)))
-        end
-        PSY.add_time_series!(
-            rts_da_sys,
-            first(
-                PSY.get_supplemental_attributes(
-                    PSY.GeometricDistributionForcedOutage,
-                    comp,
-                ),
-            ),
-            PSY.SingleTimeSeries(
-                "outage_probability",
-                TimeSeries.TimeArray(ts_timestamps, λ_vals),
-            ),
-        )
-        PSY.add_time_series!(
-            rts_da_sys,
-            first(
-                PSY.get_supplemental_attributes(
-                    PSY.GeometricDistributionForcedOutage,
-                    comp,
-                ),
-            ),
-            PSY.SingleTimeSeries(
-                "recovery_probability",
-                TimeSeries.TimeArray(ts_timestamps, μ_vals),
-            ),
-        )
-        @info "Added outage probability and recovery probability time series to supplemental attribute of $(row["Unit"]) generator"
-    end
+    rts_da_sys =
+        get_rts_gmlc_outage_timeseries(["outage_probability", "recovery_probability"])
 
     num_samples = 100
     sequential_monte_carlo = SiennaPRASInterface.SequentialMonteCarlo(
@@ -72,6 +23,108 @@
     lole = SiennaPRASInterface.val(SiennaPRASInterface.LOLE(shortfall))
     @test (eue - 94683.2) < 10000
     @test (lole - 200) < 10
+end
+
+@testset "Test RTS-GMLC Time Series RATemplate" begin
+    rts_da_sys =
+        get_rts_gmlc_outage_timeseries(["outage_probability", "recovery_probability"])
+    template = RATemplate(PSY.Area, copy(SiennaPRASInterface.DEFAULT_DEVICE_MODELS))
+    pras_sys_1 = generate_pras_system(rts_da_sys, template)
+    # TODO We neeed to fix remove_time_series! to work with SupplementalAttribute for this test to work, for now, get_rts_gmlc_outage_timeseries() will take
+    # time series names as args.
+    #=
+    for comp in PSY.get_components(PSY.Generator, rts_da_sys)
+        if (PSY.has_supplemental_attributes(comp, PSY.GeometricDistributionForcedOutage) && PSY.has_time_series(first(PSY.get_supplemental_attributes(PSY.GeometricDistributionForcedOutage, comp)), PSY.SingleTimeSeries))
+            comp_supp_attr = first(PSY.get_supplemental_attributes(PSY.GeometricDistributionForcedOutage, comp))
+
+            outage_ts = PSY.get_time_series(PSY.SingleTimeSeries, comp_supp_attr, "outage_probability")
+            # Need to do this because remove_time_series!() is not defined for SupplementalAttributes?
+            PSY.IS.remove_time_series!(rts_da_sys.data.time_series_manager.data_store, PSY.IS.get_uuid(outage_ts))
+            PSY.IS.assign_new_uuid_internal!(outage_ts)
+            #=
+            PSY.remove_time_series!(
+                rts_da_sys,
+                PSY.SingleTimeSeries,
+                comp_supp_attr,
+                "outage_probability",
+            )
+            =#
+            outage_ts.name = "Outage_Probability"
+            PSY.add_time_series!(rts_da_sys, comp_supp_attr, outage_ts)
+
+            recovery_ts = PSY.get_time_series(PSY.SingleTimeSeries, comp_supp_attr, "recovery_probability")
+            # Need to do this because remove_time_series!() is not defined for SupplementalAttributes?
+            PSY.IS.remove_time_series!(rts_da_sys.data.time_series_manager.data_store, PSY.IS.get_uuid(recovery_ts))
+            PSY.IS.assign_new_uuid_internal!(recovery_ts)
+            #=
+            PSY.remove_time_series!(
+                rts_da_sys,
+                PSY.SingleTimeSeries,
+                comp_supp_attr,
+                "recovery_probability",
+            )
+            =#
+            recovery_ts.name = "Recovery_Probability"
+            PSY.add_time_series!(rts_da_sys, comp_supp_attr, recovery_ts)
+        end
+    end
+    =#
+    rts_da_sys_1 =
+        get_rts_gmlc_outage_timeseries(["Outage_Probability", "Recovery_Probability"])
+    problem_template = SiennaPRASInterface.RATemplate(
+        PSY.Area,
+        [
+            SiennaPRASInterface.DeviceRAModel(PSY.Line, SiennaPRASInterface.LinePRAS()),
+            SiennaPRASInterface.DeviceRAModel(
+                PSY.MonitoredLine,
+                SiennaPRASInterface.LinePRAS(),
+            ),
+            SiennaPRASInterface.DeviceRAModel(
+                PSY.TwoTerminalHVDCLine,
+                SiennaPRASInterface.LinePRAS(),
+            ),
+            SiennaPRASInterface.DeviceRAModel(
+                PSY.StaticLoad,
+                SiennaPRASInterface.StaticLoadPRAS(),
+            ),
+            SiennaPRASInterface.DeviceRAModel(
+                PSY.ThermalGen,
+                SiennaPRASInterface.GeneratorPRAS(
+                    outage_probability="Outage_Probability",
+                    recovery_probability="Recovery_Probability",
+                ),
+            ),
+            SiennaPRASInterface.DeviceRAModel(
+                PSY.HydroDispatch,
+                SiennaPRASInterface.GeneratorPRAS(),
+            ),
+            SiennaPRASInterface.DeviceRAModel(
+                PSY.RenewableGen,
+                SiennaPRASInterface.GeneratorPRAS(),
+            ),
+            SiennaPRASInterface.DeviceRAModel(
+                PSY.EnergyReservoirStorage,
+                SiennaPRASInterface.EnergyReservoirLossless(),
+            ),
+            SiennaPRASInterface.DeviceRAModel(
+                PSY.HydroEnergyReservoir,
+                SiennaPRASInterface.HydroEnergyReservoirPRAS(),
+            ),
+        ],
+    )
+    pras_sys_2 = generate_pras_system(rts_da_sys_1, problem_template)
+    match_count = 0
+    for (idx, name) in enumerate(pras_sys_1.generators.names)
+        gen_idx = findfirst(pras_sys_2.generators.names .== name)
+        if (
+            all(pras_sys_2.generators.λ[gen_idx, :] .== pras_sys_1.generators.λ[idx, :]) &&
+            all(pras_sys_2.generators.μ[gen_idx, :] .== pras_sys_1.generators.μ[idx, :])
+        )
+            match_count = match_count + 1
+        end
+    end
+    @test length(pras_sys_2.generators.names) == length(pras_sys_1.generators.names)
+    @test match_count == length(pras_sys_1.generators.names)
 end
 
 @testset "Test TimeSeriesForcedOutage Avaialability Time Series Generation - PJM" begin

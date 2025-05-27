@@ -144,7 +144,7 @@ function line_type(line::DCLine) where {DCLine <: HVDCLineTypes}
 end
 
 function get_outage_time_series_data(
-    gen::Union{PSY.StaticInjection, PSY.Branch},
+    gen::PSY.StaticInjection,
     s2p_meta::S2P_metadata,
     formulation::GeneratorPRAS,
 )
@@ -157,7 +157,7 @@ function get_outage_time_series_data(
 end
 
 function get_outage_time_series_data(
-    gen::Union{PSY.StaticInjection, PSY.Branch},
+    gen::PSY.StaticInjection,
     s2p_meta::S2P_metadata,
     formulation::GeneratorStoragePRAS,
 )
@@ -201,12 +201,12 @@ function get_outage_time_series_data(
             return PSY.get_time_series_values(
                 PSY.SingleTimeSeries,
                 transition_data,
-                "outage_probability",
+                outage_probability_ts_name,
             ),
             PSY.get_time_series_values(
                 PSY.SingleTimeSeries,
                 transition_data,
-                "recovery_probability",
+                recovery_probability_ts_name,
             )
         else
             return fill(λ, s2p_meta.N), fill(μ, s2p_meta.N)

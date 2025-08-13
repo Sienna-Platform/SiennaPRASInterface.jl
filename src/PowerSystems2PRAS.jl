@@ -494,6 +494,19 @@ end
 Apply HydroEnergyReservoir Formulation to fill in a row of a PRAS Matrix.
 Views should be passed in for all arrays.
 """
+# Charging to GeneratorStorage is limited by charge_capacity whether from grid or from 
+# inflows. So, that charge_capacity should be at least equal to the inflow timeseries.
+# If other constraints exists (penstock?), and need to represented, this could be represented
+#  as well.
+# Powerflow into grid is limited by grid_injection, which can come from discharge
+# and/or exogenous inflow. girdinjcap should be turbine dispatch limit
+# Discharge capacity can be the turbine dispatch limit or 
+# arbitrarily high because this represents discharge from reservoir to turbine +
+# inflows
+# Energy capacity can be arbitrarily high in the absence of reservoir limit to 
+# ensure month to month energy energy carryover.
+# Gridwithdrawl capacity is limited by pump capacity and eventually also by the 
+# charge capacity
 function assign_to_gen_stor_matrices!(
     formulation::HydroEnergyReservoirPRAS,
     g_s::PSY.Device,
@@ -507,11 +520,9 @@ function assign_to_gen_stor_matrices!(
     if (PSY.has_time_series(g_s))
         if (PSY.has_time_series(g_s, PSY.SingleTimeSeries, get_inflow(formulation)))
             charge_cap_array .= get_pras_array_from_timeseries(g_s, get_inflow(formulation))
-            discharge_cap_array .= charge_cap_array
             inflow_array .= charge_cap_array
         else
             fill!(charge_cap_array, floor(Int, PSY.get_inflow(g_s)))
-            fill!(discharge_cap_array, floor(Int, PSY.get_inflow(g_s)))
             fill!(inflow_array, floor(Int, PSY.get_inflow(g_s)))
         end
         if (PSY.has_time_series(
@@ -531,12 +542,14 @@ function assign_to_gen_stor_matrices!(
         ))
             gridinj_cap_array .=
                 get_pras_array_from_timeseries(g_s, get_max_active_power(formulation))
+            discharge_cap_array .= gridinj_cap_array
         else
             fill!(gridinj_cap_array, floor(Int, PSY.get_max_active_power(g_s)))
+            fill!(discharge_cap_array, floor(Int, PSY.get_max_active_power(g_s)))
         end
     else
         fill!(charge_cap_array, floor(Int, PSY.get_inflow(g_s)))
-        fill!(discharge_cap_array, floor(Int, PSY.get_inflow(g_s)))
+        fill!(discharge_cap_array, floor(Int, PSY.get_max_active_power(g_s)))
         fill!(energy_cap_array, floor(Int, PSY.get_storage_capacity(g_s)))
         fill!(inflow_array, floor(Int, PSY.get_inflow(g_s)))
         fill!(gridinj_cap_array, floor(Int, PSY.get_max_active_power(g_s)))

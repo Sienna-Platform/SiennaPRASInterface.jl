@@ -74,8 +74,11 @@ import TimeSeries
 import Random123
 import Random
 using DocStringExtensions
+import PowerFlows
 
 const PSY = PowerSystems
+const PFS = PowerFlows
+
 #################################################################################
 # Includes
 #################################################################################
@@ -209,6 +212,49 @@ function PRASCore.assess(
 )
     pras_system = generate_pras_system(sys, DEFAULT_TEMPLATE)
     return PRASCore.assess(pras_system, method, resultsspecs...)
+end
+
+function assess_with_powerflow(
+    sys::PSY.System,
+    template::RATemplate,
+    method::PRASCore.SequentialMonteCarlo,
+    power_flow_evaluator::PowerFlowEvaluationModel,
+    resultsspecs::PRASCore.Results.ResultSpec...,
+)
+
+    pras_system = generate_pras_system(sys, template)
+    dispatchproblem = PRASCore.DispatchProblem(pras_system)
+    systemstate = PRASCore.SystemState(pras_system)
+    recorders = PRASCore.accumulator.(pras_system, method.nsamples, resultsspecs)
+    pf_data = PFS.make_power_flow_container(power_flow_evaluator, sys)
+    # TODO: Test performance of Philox vs Threefry, choice of rounds
+    # Also consider implementing an efficient Bernoulli trial with direct
+    # mantissa comparison
+    rng = Random123.Philox4x((0, 0), 10)
+
+    for s in sampleseeds
+
+        Random.seed!(rng, (method.seed, s))
+        PRASCore.initialize!(rng, systemstate, system)
+
+        for t in 1:N
+
+            PRASCore.advance!(rng, systemstate, dispatchproblem, system, t)
+            PRASCore.solve!(dispatchproblem, systemstate, system, t)
+            write_output_to_pf_data!(pf_data, dispatchproblem)
+            PFS.solve_powerflow!(pf_data)
+            foreach(recorder -> PRASCore.record!(
+                        recorder, system, systemstate, dispatchproblem, s, t
+                    ), recorders)
+
+        end
+
+        foreach(recorder -> PRASCore.reset!(recorder, s), recorders)
+
+    end
+
+    put!(results, recorders)
+
 end
 
 end

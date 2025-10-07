@@ -101,17 +101,13 @@ function line_rating(line::PSY.MonitoredLine)
     return (forward_capacity=rate.from_to, backward_capacity=rate.to_from)
 end
 
-function line_rating(line::PSY.TwoTerminalHVDCLine)
+function line_rating(line::PSY.TwoTerminalHVDC)
     forward_capacity = PSY.get_active_power_limits_from(line).max
     backward_capacity = PSY.get_active_power_limits_to(line).max
     return (
         forward_capacity=abs(forward_capacity),
         backward_capacity=abs(backward_capacity),
     )
-end
-
-function line_rating(line::DCLine) where {DCLine <: HVDCLineTypes}
-    error("line_rating isn't defined for $(typeof(line))")
 end
 
 """
@@ -135,12 +131,16 @@ function line_type(line::Union{PSY.Line, PSY.MonitoredLine})
     return "ACLine"
 end
 
-function line_type(line::PSY.TwoTerminalHVDCLine)
+function line_type(line::PSY.TwoTerminalGenericHVDCLine)
     return "HVDCLine"
 end
 
-function line_type(line::DCLine) where {DCLine <: HVDCLineTypes}
-    error("line_type isn't defined for $(typeof(line))")
+function line_type(line::PSY.TwoTerminalLCCLine)
+    return "LCC"
+end
+
+function line_type(line::PSY.TwoTerminalVSCLine)
+    return "VSC"
 end
 
 function get_outage_time_series_data(

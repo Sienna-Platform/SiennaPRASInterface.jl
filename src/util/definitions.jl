@@ -8,11 +8,6 @@ const OUTAGE_INFO_FILE =
     joinpath(@__DIR__, "descriptors", "outage-rates-ERCOT-modified.csv")
 
 """
-    Supported DC branch Types
-"""
-const HVDCLineTypes = Union{PSY.TwoTerminalHVDCLine, PSY.TwoTerminalVSCDCLine}
-
-"""
     Filtered Transformer Types
 
 These transformers are not modeled as lines in PRAS.

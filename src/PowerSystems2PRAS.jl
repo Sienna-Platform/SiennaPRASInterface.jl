@@ -968,7 +968,7 @@ end
 const DEFAULT_DEVICE_MODELS = [
     DeviceRAModel(PSY.Line, LinePRAS),
     DeviceRAModel(PSY.MonitoredLine, LinePRAS),
-    DeviceRAModel(PSY.TwoTerminalHVDCLine, LinePRAS),
+    DeviceRAModel(PSY.TwoTerminalGenericHVDCLine, LinePRAS),
     DeviceRAModel(PSY.StaticLoad, StaticLoadPRAS),
     DeviceRAModel(PSY.ThermalGen, GeneratorPRAS),
     DeviceRAModel(PSY.RenewableGen, GeneratorPRAS),
@@ -981,7 +981,7 @@ const DEFAULT_DEVICE_MODELS = [
 const _LUMPED_RENEWABLE_DEVICE_MODELS = [
     DeviceRAModel(PSY.Line, LinePRAS),
     DeviceRAModel(PSY.MonitoredLine, LinePRAS),
-    DeviceRAModel(PSY.TwoTerminalHVDCLine, LinePRAS),
+    DeviceRAModel(PSY.TwoTerminalGenericHVDCLine, LinePRAS),
     DeviceRAModel(PSY.StaticLoad, StaticLoadPRAS),
     DeviceRAModel(PSY.ThermalGen, GeneratorPRAS),
     DeviceRAModel(PSY.RenewableGen, GeneratorPRAS, lump_renewable_generation=true),

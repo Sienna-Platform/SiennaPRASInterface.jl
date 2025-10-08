@@ -973,9 +973,10 @@ const DEFAULT_DEVICE_MODELS = [
     DeviceRAModel(PSY.ThermalGen, GeneratorPRAS),
     DeviceRAModel(PSY.RenewableGen, GeneratorPRAS),
     DeviceRAModel(PSY.HydroDispatch, GeneratorPRAS),
+    DeviceRAModel(PSY.HydroTurbine, GeneratorPRAS),
     DeviceRAModel(PSY.EnergyReservoirStorage, EnergyReservoirLossless),
     DeviceRAModel(PSY.HybridSystem, HybridSystemPRAS),
-    DeviceRAModel(PSY.HydroEnergyReservoir, HydroEnergyReservoirPRAS),
+    DeviceRAModel(PSY.HydroPumpTurbine, HydroEnergyReservoirPRAS),
 ]
 
 const _LUMPED_RENEWABLE_DEVICE_MODELS = [
@@ -986,9 +987,10 @@ const _LUMPED_RENEWABLE_DEVICE_MODELS = [
     DeviceRAModel(PSY.ThermalGen, GeneratorPRAS),
     DeviceRAModel(PSY.RenewableGen, GeneratorPRAS, lump_renewable_generation=true),
     DeviceRAModel(PSY.HydroDispatch, GeneratorPRAS),
+    DeviceRAModel(PSY.HydroTurbine, GeneratorPRAS),
     DeviceRAModel(PSY.EnergyReservoirStorage, EnergyReservoirLossless),
     DeviceRAModel(PSY.HybridSystem, HybridSystemPRAS),
-    DeviceRAModel(PSY.HydroEnergyReservoir, HydroEnergyReservoirPRAS),
+    DeviceRAModel(PSY.HydroPumpTurbine, HydroEnergyReservoirPRAS),
 ]
 
 const DEFAULT_TEMPLATE = RATemplate(PSY.Area, DEFAULT_DEVICE_MODELS)

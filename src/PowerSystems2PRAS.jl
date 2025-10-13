@@ -284,13 +284,12 @@ function process_generators(
     component_to_formulation::Dict{PowerSystems.Device, GeneratorPRAS},
     lumped_mapping::Dict{String, Vector{PSY.Device}},
 )
-    if (length(gen) == 0)
-        gen_names = String[]
+    gen_names, gen_categories = if (length(gen) == 0)
+        String[], String[]
     else
-        gen_names = PSY.get_name.(gen)
+        PSY.get_name.(gen), get_generator_category.(gen)
     end
 
-    gen_categories = get_generator_category.(gen)
     n_gen = length(gen_names)
 
     gen_cap_array = Matrix{Int64}(undef, n_gen, s2p_meta.N)
@@ -347,7 +346,7 @@ function process_generators(
         PRASCore.MW,
     }(
         gen_names,
-        get_generator_category.(gen),
+        gen_categories,
         gen_cap_array,
         λ_gen,
         μ_gen,
@@ -384,10 +383,10 @@ function process_storage(
     s2p_meta::S2P_metadata,
     component_to_formulation::Dict{PSY.Device, StoragePRAS},
 )
-    if (length(stor) == 0)
-        stor_names = String[]
+    stor_names, stor_categories = if (length(stor) == 0)
+        String[], String[]
     else
-        stor_names = PSY.get_name.(stor)
+        PSY.get_name.(stor), get_generator_category.(stor)
     end
 
     n_stor = length(stor_names)
@@ -425,7 +424,7 @@ function process_storage(
         PRASCore.MWh,
     }(
         stor_names,
-        get_generator_category.(stor),
+        stor_categories,
         stor_charge_cap_array,
         stor_discharge_cap_array,
         stor_energy_cap_array,
@@ -549,10 +548,10 @@ function process_genstorage(
     s2p_meta::S2P_metadata,
     component_to_formulation::Dict{PSY.Device, GeneratorStoragePRAS},
 )
-    if (length(gen_stor) == 0)
-        gen_stor_names = String[]
+    gen_stor_names, gen_stor_categories = if (length(gen_stor) == 0)
+        String[], String[]
     else
-        gen_stor_names = PSY.get_name.(gen_stor)
+        PSY.get_name.(gen_stor), get_generator_category.(gen_stor)
     end
 
     n_genstors = length(gen_stor_names)
@@ -594,7 +593,7 @@ function process_genstorage(
         PRASCore.MWh,
     }(
         gen_stor_names,
-        get_generator_category.(gen_stor),
+        gen_stor_categories,
         gen_stor_charge_cap_array,
         gen_stor_discharge_cap_array,
         gen_stor_enrgy_cap_array,
@@ -635,13 +634,9 @@ function process_lines(
     s2p_meta::S2P_metadata,
     lines_to_formulation::Dict{PSY.Device, LinePRAS},
 )
-    num_lines = length(sorted_lines)
-    if num_lines == 0
-        line_names = String[]
-    else
-        line_names = PSY.get_name.(sorted_lines)
-    end
     # Lines
+    num_lines = length(sorted_lines)
+    line_names = PSY.get_name.(sorted_lines)
     line_cats = line_type.(sorted_lines)
 
     line_forward_cap = Matrix{Int64}(undef, num_lines, s2p_meta.N)

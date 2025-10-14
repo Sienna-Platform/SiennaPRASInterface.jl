@@ -804,16 +804,15 @@ function generate_pras_system(
     # TODO: Is it okay to assume each System will have a
     # SingleTimeSeries?
     #######################################################
-    #
-    static_ts_summary = PSY.get_static_time_series_summary_table(sys)
-
     # Ensure Sienna/Data System has static time series
-    if isempty(static_ts_summary)
+    ts_counts = PSY.get_time_series_counts(sys)
+    if iszero(ts_counts.static_time_series_count)
         error(
             "System doesn't have any StaticTimeSeries. Other TimeSeries types are not suitable for resource adequacy analysis.",
         )
     end
 
+    static_ts_summary = PSY.get_static_time_series_summary_table(sys)
     s2p_meta = S2P_metadata(static_ts_summary)
 
     start_datetime_tz = TimeZones.ZonedDateTime(s2p_meta.first_timestamp, TimeZones.tz"UTC")

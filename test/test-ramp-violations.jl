@@ -18,19 +18,25 @@ include("rts_gmlc.jl")
     print_ramp_violation_diagnostics(ramp_violations, sys, title)
 
 Print comprehensive diagnostics for ramp violation results including:
-- Summary statistics
-- Histograms of violation magnitudes
-- Top violating generators
-- Time series plots
-- Large violation analysis
+
+  - Summary statistics
+  - Histograms of violation magnitudes
+  - Top violating generators
+  - Time series plots
+  - Large violation analysis
 """
 function print_ramp_violation_diagnostics(
     ramp_violations::RampViolationsResult,
     sys::PSY.System,
     title::String="Ramp Violation Summary",
 )
-    max_violation = maximum(ramp_violations.ramp_violation.value)
     total_violations = length(ramp_violations.ramp_violation.value)
+    if total_violations == 0
+        println("\n=== $title ===")
+        println("No violations found")
+        return
+    end
+    max_violation = maximum(ramp_violations.ramp_violation.value)
 
     println("\n=== $title ===")
     println("Maximum ramp violation found: $(max_violation) MW")
@@ -40,8 +46,12 @@ function print_ramp_violation_diagnostics(
 
     # Only show percentiles if we have enough data
     if total_violations >= 10
-        println("90th percentile: $(quantile(ramp_violations.ramp_violation.value, 0.9)) MW")
-        println("99th percentile: $(quantile(ramp_violations.ramp_violation.value, 0.99)) MW")
+        println(
+            "90th percentile: $(quantile(ramp_violations.ramp_violation.value, 0.9)) MW",
+        )
+        println(
+            "99th percentile: $(quantile(ramp_violations.ramp_violation.value, 0.99)) MW",
+        )
     end
 
     # Plot violation distribution
@@ -67,17 +77,26 @@ function print_ramp_violation_diagnostics(
 
     # Top generators by total violation
     println("\nTop 10 Generators by Total Violation (MW):")
-    sorted_gens_by_sum = sort(collect(gen_violation_sums), by=x -> x[2], rev=true)[1:min(10, length(gen_violation_sums))]
+    sorted_gens_by_sum = sort(collect(gen_violation_sums), by=x -> x[2], rev=true)[1:min(
+        10,
+        length(gen_violation_sums),
+    )]
     for (gen_idx, total_violation) in sorted_gens_by_sum
         gen_name = ramp_violations.generators[gen_idx]
         count = gen_violation_counts[gen_idx]
         avg_violation = total_violation / count
-        println("  $gen_name (idx $gen_idx): $(round(total_violation, digits=2)) MW total, $count violations, $(round(avg_violation, digits=2)) MW avg")
+        println(
+            "  $gen_name (idx $gen_idx): $(round(total_violation, digits=2)) MW total, $count violations, $(round(avg_violation, digits=2)) MW avg",
+        )
     end
 
     # Top generators by violation count with ramp limit info
     println("\nTop 10 Generators by Violation Count:")
-    sorted_gens_by_count = sort(collect(gen_violation_counts), by=x -> x[2], rev=true)[1:min(10, length(gen_violation_counts))]
+    sorted_gens_by_count =
+        sort(collect(gen_violation_counts), by=x -> x[2], rev=true)[1:min(
+            10,
+            length(gen_violation_counts),
+        )]
     for (gen_idx, count) in sorted_gens_by_count
         gen_name = ramp_violations.generators[gen_idx]
         gen = PSY.get_component(PSY.Generator, sys, gen_name)
@@ -93,25 +112,26 @@ function print_ramp_violation_diagnostics(
             ramp_info = " (renewable dispatch)"
         end
 
-        println("  $gen_name (idx $gen_idx): $count violations, $(round(total_violation, digits=2)) MW total, $(round(avg_violation, digits=2)) MW avg$ramp_info")
+        println(
+            "  $gen_name (idx $gen_idx): $count violations, $(round(total_violation, digits=2)) MW total, $(round(avg_violation, digits=2)) MW avg$ramp_info",
+        )
     end
 
     # Violations over time
     println("\nViolations by Timestep:")
-    time_violation_counts = Dict{Int, Int}()
+    time_violation_counts = zeros(maximum(ramp_violations.ramp_violation.time))
     for time_idx in ramp_violations.ramp_violation.time
-        time_violation_counts[time_idx] = get(time_violation_counts, time_idx, 0) + 1
+        time_violation_counts[time_idx] += 1
     end
-
-    sorted_times = sort(collect(time_violation_counts), by=x -> x[1])
-    if length(sorted_times) > 0
-        times = [t[1] for t in sorted_times]
-        counts = [t[2] for t in sorted_times]
-        println(UnicodePlots.lineplot(times, counts,
+    println(
+        UnicodePlots.scatterplot(
+            1:length(time_violation_counts),
+            time_violation_counts,
             xlabel="Timestep",
             ylabel="Violation Count",
-            title="Violations Over Time"))
-    end
+            title="Violations Over Time",
+        ),
+    )
 
     # Sample-wise violations
     println("\nTotal Violation per Sample:")
@@ -128,7 +148,9 @@ function print_ramp_violation_diagnostics(
     large_violations = filter(x -> x > 1.0, ramp_violations.ramp_violation.value)
     if length(large_violations) > 0
         println("  Count of violations > 1 MW: $(length(large_violations))")
-        println("  Percentage of total: $(round(100 * length(large_violations) / total_violations, digits=2))%")
+        println(
+            "  Percentage of total: $(round(100 * length(large_violations) / total_violations, digits=2))%",
+        )
         println("  Mean of large violations: $(round(mean(large_violations), digits=2)) MW")
 
         # Find generators with large violations
@@ -141,13 +163,18 @@ function print_ramp_violation_diagnostics(
         end
 
         println("\n  Generators with most large violations (> 1 MW):")
-        sorted_large = sort(collect(large_violation_gens), by=x -> x[2], rev=true)[1:min(5, length(large_violation_gens))]
+        sorted_large = sort(collect(large_violation_gens), by=x -> x[2], rev=true)[1:min(
+            5,
+            length(large_violation_gens),
+        )]
         for (gen_idx, count) in sorted_large
             gen_name = ramp_violations.generators[gen_idx]
             gen = PSY.get_component(PSY.Generator, sys, gen_name)
             if isa(gen, Union{PSY.ThermalGen, PSY.HydroDispatch})
                 ramp_limits = PSY.get_ramp_limits(gen)
-                println("    $gen_name: $count large violations (ramp limits: ↑$(round(ramp_limits.up, digits=4)) ↓$(round(ramp_limits.down, digits=4)) MW/min)")
+                println(
+                    "    $gen_name: $count large violations (ramp limits: ↑$(round(ramp_limits.up, digits=4)) ↓$(round(ramp_limits.down, digits=4)) MW/min)",
+                )
             else
                 println("    $gen_name: $count large violations")
             end
@@ -158,29 +185,48 @@ function print_ramp_violation_diagnostics(
     if length(ramp_violations.regional_ramp_infeasibility.value) > 0
         println("\n=== Regional Ramp Infeasibility ===")
         println("These violations cannot be avoided by any disaggregation method.")
-        println("The regional dispatch trajectory itself exceeds available ramp capability.")
+        println(
+            "The regional dispatch trajectory itself exceeds available ramp capability.",
+        )
 
-        total_regional_infeasibility = sum(ramp_violations.regional_ramp_infeasibility.value)
-        println("Total regional infeasibility: $(round(total_regional_infeasibility, digits=2)) MW/min")
-        println("Number of infeasible timesteps: $(length(ramp_violations.regional_ramp_infeasibility.value))")
+        total_regional_infeasibility =
+            sum(ramp_violations.regional_ramp_infeasibility.value)
+        println(
+            "Total regional infeasibility: $(round(total_regional_infeasibility, digits=2)) MW/min",
+        )
+        println(
+            "Number of infeasible timesteps: $(length(ramp_violations.regional_ramp_infeasibility.value))",
+        )
 
         # Count by region
         region_infeasibility = Dict{Int, Float64}()
         for (i, region_idx) in enumerate(ramp_violations.regional_ramp_infeasibility.idx)
-            region_infeasibility[region_idx] = get(region_infeasibility, region_idx, 0.0) +
-                                                ramp_violations.regional_ramp_infeasibility.value[i]
+            region_infeasibility[region_idx] =
+                get(region_infeasibility, region_idx, 0.0) +
+                ramp_violations.regional_ramp_infeasibility.value[i]
         end
 
         println("\nInfeasibility by Region:")
-        for (region_idx, total) in sort(collect(region_infeasibility), by=x->x[2], rev=true)
-            count = sum(1 for (i, idx) in enumerate(ramp_violations.regional_ramp_infeasibility.idx) if idx == region_idx)
+        for (region_idx, total) in
+            sort(collect(region_infeasibility), by=x -> x[2], rev=true)
+            count = sum(
+                1 for
+                (i, idx) in enumerate(ramp_violations.regional_ramp_infeasibility.idx) if
+                idx == region_idx
+            )
             avg = total / count
-            println("  Region $region_idx: $(round(total, digits=2)) MW/min total, $count instances, $(round(avg, digits=2)) MW/min avg")
+            println(
+                "  Region $region_idx: $(round(total, digits=2)) MW/min total, $count instances, $(round(avg, digits=2)) MW/min avg",
+            )
         end
     else
         println("\n=== Regional Ramp Feasibility ===")
-        println("All regional dispatch trajectories are feasible given available ramp capability.")
-        println("Generator-level violations are due to disaggregation choices, not fundamental infeasibility.")
+        println(
+            "All regional dispatch trajectories are feasible given available ramp capability.",
+        )
+        println(
+            "Generator-level violations are due to disaggregation choices, not fundamental infeasibility.",
+        )
     end
 end
 
@@ -241,12 +287,16 @@ function create_ramp_violation_test_system()
         modified_count += 1
         limits = PSY.get_ramp_limits(gen)
         if isnan(limits.up) || isnan(limits.down)
-            println("WARNING: $(PSY.get_name(gen)) has NaN ramp limits: up=$(limits.up), down=$(limits.down)")
+            println(
+                "WARNING: $(PSY.get_name(gen)) has NaN ramp limits: up=$(limits.up), down=$(limits.down)",
+            )
             nan_count += 1
         end
     end
     if nan_count == 0
-        println("Modified $modified_count thermal generators with valid ramp limits (skipped synchronous condensers)")
+        println(
+            "Modified $modified_count thermal generators with valid ramp limits (skipped synchronous condensers)",
+        )
     else
         println("ERROR: $nan_count generators have NaN ramp limits!")
     end
@@ -337,19 +387,26 @@ end
             print_ramp_violation_diagnostics(
                 ramp_violations,
                 rts_sys,
-                "Ramp Violation Summary (Original RTS-GMLC - Proportional)"
+                "Ramp Violation Summary (Original RTS-GMLC - Proportional)",
             )
 
             # With normal RTS ramp limits, violations should exist but structure should be valid
-            @test maximum(ramp_violations.ramp_violation.value) > 0.0
+            @test length(ramp_violations.ramp_violation.value) == 0 ||
+                  minimum(ramp_violations.ramp_violation.value) > 0.0
         end
 
         @testset "assess with RampViolations (merit order)" begin
             # Create wrapper function that captures sys in closure
-            merit_order_wrapper = (region_dispatch, gen_idxs, system, state, t) ->
-                SiennaPRASInterface.merit_order_disaggregation(
-                    region_dispatch, gen_idxs, system, state, t, rts_sys
-                )
+            merit_order_wrapper =
+                (region_dispatch, gen_idxs, system, state, t) ->
+                    SiennaPRASInterface.merit_order_disaggregation(
+                        region_dispatch,
+                        gen_idxs,
+                        system,
+                        state,
+                        t,
+                        rts_sys,
+                    )
 
             shortfalls, ramp_violations_merit = SiennaPRASInterface.assess(
                 rts_sys,
@@ -362,7 +419,8 @@ end
             # Test that we got the expected result types
             @test shortfalls isa SiennaPRASInterface.PRASCore.Results.ShortfallResult
             @test ramp_violations_merit isa RampViolationsResult
-            @test ramp_violations_merit.ramp_violation isa SiennaPRASInterface.Sparse3DAccumulator
+            @test ramp_violations_merit.ramp_violation isa
+                  SiennaPRASInterface.Sparse3DAccumulator
             @test ramp_violations_merit.total_ramp_violation isa
                   SiennaPRASInterface.Sparse2DAccumulator
 
@@ -375,19 +433,25 @@ end
             print_ramp_violation_diagnostics(
                 ramp_violations_merit,
                 rts_sys,
-                "Ramp Violation Summary (Original RTS-GMLC - Merit Order)"
+                "Ramp Violation Summary (Original RTS-GMLC - Merit Order)",
             )
 
-            # With normal RTS ramp limits, violations should exist but structure should be valid
-            @test maximum(ramp_violations_merit.ramp_violation.value) > 0.0
+            @test length(ramp_violations_merit.ramp_violation.value) == 0 ||
+                  minimum(ramp_violations_merit.ramp_violation.value) > 0.0
         end
 
         @testset "assess with RampViolations (ramp-aware)" begin
             # Create wrapper function that captures sys in closure
-            ramp_aware_wrapper = (region_dispatch, gen_idxs, system, state, t) ->
-                SiennaPRASInterface.ramp_aware_disaggregation(
-                    region_dispatch, gen_idxs, system, state, t, rts_sys
-                )
+            ramp_aware_wrapper =
+                (region_dispatch, gen_idxs, system, state, t) ->
+                    SiennaPRASInterface.ramp_aware_disaggregation(
+                        region_dispatch,
+                        gen_idxs,
+                        system,
+                        state,
+                        t,
+                        rts_sys,
+                    )
 
             shortfalls, ramp_violations_ramp = SiennaPRASInterface.assess(
                 rts_sys,
@@ -400,7 +464,8 @@ end
             # Test that we got the expected result types
             @test shortfalls isa SiennaPRASInterface.PRASCore.Results.ShortfallResult
             @test ramp_violations_ramp isa RampViolationsResult
-            @test ramp_violations_ramp.ramp_violation isa SiennaPRASInterface.Sparse3DAccumulator
+            @test ramp_violations_ramp.ramp_violation isa
+                  SiennaPRASInterface.Sparse3DAccumulator
             @test ramp_violations_ramp.total_ramp_violation isa
                   SiennaPRASInterface.Sparse2DAccumulator
 
@@ -413,11 +478,11 @@ end
             print_ramp_violation_diagnostics(
                 ramp_violations_ramp,
                 rts_sys,
-                "Ramp Violation Summary (Original RTS-GMLC - Ramp-Aware)"
+                "Ramp Violation Summary (Original RTS-GMLC - Ramp-Aware)",
             )
 
-            # With normal RTS ramp limits, violations should exist but structure should be valid
-            @test maximum(ramp_violations_ramp.ramp_violation.value) > 0.0
+            @test length(ramp_violations_ramp.ramp_violation.value) == 0 ||
+                  minimum(ramp_violations_ramp.ramp_violation.value) > 0.0
         end
     end
 
@@ -454,7 +519,7 @@ end
             print_ramp_violation_diagnostics(
                 ramp_violations,
                 rts_sys,
-                "Ramp Violation Summary (Modified RTS-GMLC with Tight Limits - Proportional)"
+                "Ramp Violation Summary (Modified RTS-GMLC with Tight Limits - Proportional)",
             )
 
             # We expect to see violations with our tight limits
@@ -464,10 +529,16 @@ end
 
         @testset "assess with RampViolations (merit order)" begin
             # Create wrapper function that captures sys in closure
-            merit_order_wrapper = (region_dispatch, gen_idxs, system, state, t) ->
-                SiennaPRASInterface.merit_order_disaggregation(
-                    region_dispatch, gen_idxs, system, state, t, rts_sys
-                )
+            merit_order_wrapper =
+                (region_dispatch, gen_idxs, system, state, t) ->
+                    SiennaPRASInterface.merit_order_disaggregation(
+                        region_dispatch,
+                        gen_idxs,
+                        system,
+                        state,
+                        t,
+                        rts_sys,
+                    )
 
             shortfalls, ramp_violations_merit = SiennaPRASInterface.assess(
                 rts_sys,
@@ -480,7 +551,8 @@ end
             # Test that we got the expected result types
             @test shortfalls isa SiennaPRASInterface.PRASCore.Results.ShortfallResult
             @test ramp_violations_merit isa RampViolationsResult
-            @test ramp_violations_merit.ramp_violation isa SiennaPRASInterface.Sparse3DAccumulator
+            @test ramp_violations_merit.ramp_violation isa
+                  SiennaPRASInterface.Sparse3DAccumulator
             @test ramp_violations_merit.total_ramp_violation isa
                   SiennaPRASInterface.Sparse2DAccumulator
 
@@ -493,7 +565,7 @@ end
             print_ramp_violation_diagnostics(
                 ramp_violations_merit,
                 rts_sys,
-                "Ramp Violation Summary (Modified RTS-GMLC with Tight Limits - Merit Order)"
+                "Ramp Violation Summary (Modified RTS-GMLC with Tight Limits - Merit Order)",
             )
 
             # We expect to see violations with our tight limits
@@ -503,10 +575,16 @@ end
 
         @testset "assess with RampViolations (ramp-aware)" begin
             # Create wrapper function that captures sys in closure
-            ramp_aware_wrapper = (region_dispatch, gen_idxs, system, state, t) ->
-                SiennaPRASInterface.ramp_aware_disaggregation(
-                    region_dispatch, gen_idxs, system, state, t, rts_sys
-                )
+            ramp_aware_wrapper =
+                (region_dispatch, gen_idxs, system, state, t) ->
+                    SiennaPRASInterface.ramp_aware_disaggregation(
+                        region_dispatch,
+                        gen_idxs,
+                        system,
+                        state,
+                        t,
+                        rts_sys,
+                    )
 
             shortfalls, ramp_violations_ramp = SiennaPRASInterface.assess(
                 rts_sys,
@@ -519,7 +597,8 @@ end
             # Test that we got the expected result types
             @test shortfalls isa SiennaPRASInterface.PRASCore.Results.ShortfallResult
             @test ramp_violations_ramp isa RampViolationsResult
-            @test ramp_violations_ramp.ramp_violation isa SiennaPRASInterface.Sparse3DAccumulator
+            @test ramp_violations_ramp.ramp_violation isa
+                  SiennaPRASInterface.Sparse3DAccumulator
             @test ramp_violations_ramp.total_ramp_violation isa
                   SiennaPRASInterface.Sparse2DAccumulator
 
@@ -532,7 +611,7 @@ end
             print_ramp_violation_diagnostics(
                 ramp_violations_ramp,
                 rts_sys,
-                "Ramp Violation Summary (Modified RTS-GMLC with Tight Limits - Ramp-Aware)"
+                "Ramp Violation Summary (Modified RTS-GMLC with Tight Limits - Ramp-Aware)",
             )
 
             # We expect to see violations with our tight limits

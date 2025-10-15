@@ -552,7 +552,9 @@ function get_regional_ramp_bounds(
             ramp_limits = PSY.get_ramp_limits(generator)
             # Check for NaN ramp limits and fail fast with clear error
             if isnan(ramp_limits.up) || isnan(ramp_limits.down)
-                error("Generator $(gen_name) has NaN ramp limits (up=$(ramp_limits.up), down=$(ramp_limits.down)).")
+                error(
+                    "Generator $(gen_name) has NaN ramp limits (up=$(ramp_limits.up), down=$(ramp_limits.down)).",
+                )
             end
             total_ramp_up += ramp_limits.up
             total_ramp_down += ramp_limits.down
@@ -658,17 +660,20 @@ function PRASCore.Simulations.record!(
             for region_idx in 1:length(system.regions)
                 # Calculate required regional ramp
                 required_dispatch_change =
-                    region_generation[region_idx] - acc.previous_regional_dispatch[region_idx]
+                    region_generation[region_idx] -
+                    acc.previous_regional_dispatch[region_idx]
                 required_ramp_rate = required_dispatch_change / time_difference.value  # MW/min
 
                 # Calculate available regional ramp capability
-                ramp_bounds = get_regional_ramp_bounds(acc.sys, system, state, region_idx, t)
+                ramp_bounds =
+                    get_regional_ramp_bounds(acc.sys, system, state, region_idx, t)
 
                 # Check if regional ramp is feasible
                 infeasibility = 0.0
                 if required_ramp_rate > 0.0 && required_ramp_rate > ramp_bounds.up
                     infeasibility = required_ramp_rate - ramp_bounds.up
-                elseif required_ramp_rate < 0.0 && abs(required_ramp_rate) > ramp_bounds.down
+                elseif required_ramp_rate < 0.0 &&
+                       abs(required_ramp_rate) > ramp_bounds.down
                     infeasibility = abs(required_ramp_rate) - ramp_bounds.down
                 end
 
@@ -742,15 +747,6 @@ function PRASCore.Simulations.record!(
                     total_violation += violation
                 elseif -ramp_rate > limits.down
                     violation = -ramp_rate - limits.down
-                    acc.ramp_violation[gen_idx, t, sampleid] = violation
-                    total_violation += violation
-                end
-            else
-                # Generator turning on/off - dispatch change should match capacity change
-                expected_change_rate = limits.capacity_change / time_difference.value
-                if abs(ramp_rate - expected_change_rate) > 1e-6  # tolerance for floating point
-                    # This shouldn't happen in PRAS, but record if it does
-                    violation = abs(ramp_rate - expected_change_rate)
                     acc.ramp_violation[gen_idx, t, sampleid] = violation
                     total_violation += violation
                 end

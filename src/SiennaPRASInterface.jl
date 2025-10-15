@@ -60,6 +60,15 @@ export StaticLoadPRAS
 export set_device_model!
 export RATemplate
 
+# Bias estimation exports
+export RampViolations
+export RampViolationsResult
+export RampViolationsAccumulator
+export proportional_disaggregation
+export merit_order_disaggregation
+export ramp_aware_disaggregation
+export get_marginal_cost
+
 #################################################################################
 # Imports
 #################################################################################
@@ -127,6 +136,7 @@ include("PowerSystems2PRAS.jl")
 
 include("util/parsing/result_export_helper_functions.jl")
 include("PRAS2PowerSystems.jl")
+include("estimate_bias.jl")
 
 """
     assess(

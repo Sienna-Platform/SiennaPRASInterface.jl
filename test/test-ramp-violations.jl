@@ -143,15 +143,44 @@ function print_ramp_violation_diagnostics(
         println("  Median: $(round(median(sample_violations), digits=2)) MW")
     end
 
+    # Show top violations with required vs limit details
+    println("\nTop 10 Largest Violations (with required vs limit):")
+    # Create vector of tuples: (violation, gen_idx, required, limit, time, sample)
+    violation_details = [
+        (
+            ramp_violations.ramp_violation.value[i],
+            ramp_violations.ramp_violation.idx[i],
+            ramp_violations.ramp_required.value[i],
+            ramp_violations.ramp_limit.value[i],
+            ramp_violations.ramp_violation.time[i],
+            ramp_violations.ramp_violation.sampleid[i],
+        ) for i in 1:length(ramp_violations.ramp_violation.value)
+    ]
+    sort!(violation_details, by=x -> x[1], rev=true)
+
+    for (i, (violation, gen_idx, required, limit, time, sample)) in enumerate(violation_details[1:min(10, length(violation_details))])
+        gen_name = ramp_violations.generators[gen_idx]
+        ratio = required / limit
+        println(
+            "  #$i: $gen_name at t=$time, sample=$sample",
+        )
+        println(
+            "      Required: $(round(required, digits=4)) MW/min, Limit: $(round(limit, digits=4)) MW/min",
+        )
+        println(
+            "      Violation: $(round(violation, digits=4)) MW/min ($(round(ratio, digits=2))x over limit)",
+        )
+    end
+
     # Analysis of large violations
-    println("\nAnalysis of Large Violations (> 1 MW):")
+    println("\nAnalysis of Large Violations (> 1 MW/min):")
     large_violations = filter(x -> x > 1.0, ramp_violations.ramp_violation.value)
     if length(large_violations) > 0
-        println("  Count of violations > 1 MW: $(length(large_violations))")
+        println("  Count of violations > 1 MW/min: $(length(large_violations))")
         println(
             "  Percentage of total: $(round(100 * length(large_violations) / total_violations, digits=2))%",
         )
-        println("  Mean of large violations: $(round(mean(large_violations), digits=2)) MW")
+        println("  Mean of large violations: $(round(mean(large_violations), digits=2)) MW/min")
 
         # Find generators with large violations
         large_violation_gens = Dict{Int, Int}()
@@ -162,7 +191,7 @@ function print_ramp_violation_diagnostics(
             end
         end
 
-        println("\n  Generators with most large violations (> 1 MW):")
+        println("\n  Generators with most large violations (> 1 MW/min):")
         sorted_large = sort(collect(large_violation_gens), by=x -> x[2], rev=true)[1:min(
             5,
             length(large_violation_gens),

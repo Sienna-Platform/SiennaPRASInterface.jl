@@ -452,7 +452,9 @@ mutable struct RampViolationsAccumulator <:
                PRASCore.Results.ResultAccumulator{RampViolations}
     sys::PSY.System
     disaggregation_func::DisaggregationFunction
-    ramp_violation::Sparse3DAccumulator{Float64}
+    ramp_violation::Sparse3DAccumulator{Float64}  # Magnitude of violation (MW/min)
+    ramp_required::Sparse3DAccumulator{Float64}  # Required ramp rate (MW/min)
+    ramp_limit::Sparse3DAccumulator{Float64}  # Ramp limit that was violated (MW/min)
     total_ramp_violation::Sparse2DAccumulator{Float64}
     generator_unavailability::Sparse3DAccumulator{Bool}
     previous_generation::Vector{Float64}  # Per-generator dispatch
@@ -469,11 +471,13 @@ function PRASCore.Results.accumulator(
     return RampViolationsAccumulator(
         ramp_violator.sys,
         ramp_violator.disaggregation_func,
-        Sparse3DAccumulator{Float64}(),
-        Sparse2DAccumulator{Float64}(),
-        Sparse3DAccumulator{Bool}(),
-        zeros(Float64, length(sys.generators.names)),
-        zeros(Bool, length(sys.generators.names)),
+        Sparse3DAccumulator{Float64}(),  # ramp_violation
+        Sparse3DAccumulator{Float64}(),  # ramp_required
+        Sparse3DAccumulator{Float64}(),  # ramp_limit
+        Sparse2DAccumulator{Float64}(),  # total_ramp_violation
+        Sparse3DAccumulator{Bool}(),  # generator_unavailability
+        zeros(Float64, length(sys.generators.names)),  # previous_generation
+        zeros(Bool, length(sys.generators.names)),  # previous_availability
         Sparse3DAccumulator{Float64}(),  # regional_ramp_infeasibility
         zeros(Float64, length(sys.regions)),  # previous_regional_dispatch
     )
@@ -481,6 +485,8 @@ end
 
 function PRASCore.Results.merge!(x::RampViolationsAccumulator, y::RampViolationsAccumulator)
     merge!(x.ramp_violation, y.ramp_violation)
+    merge!(x.ramp_required, y.ramp_required)
+    merge!(x.ramp_limit, y.ramp_limit)
     merge!(x.total_ramp_violation, y.total_ramp_violation)
     merge!(x.generator_unavailability, y.generator_unavailability)
     merge!(x.regional_ramp_infeasibility, y.regional_ramp_infeasibility)
@@ -491,7 +497,9 @@ PRASCore.Results.accumulatortype(::RampViolations) = RampViolationsAccumulator
 struct RampViolationsResult{N, L, T <: PRASCore.Period}
     timestamps::StepRange{PRASCore.ZonedDateTime, T}
     generators::Vector{String}
-    ramp_violation::Sparse3DAccumulator{Float64}
+    ramp_violation::Sparse3DAccumulator{Float64}  # Magnitude of violation (MW/min)
+    ramp_required::Sparse3DAccumulator{Float64}  # Required ramp rate (MW/min)
+    ramp_limit::Sparse3DAccumulator{Float64}  # Ramp limit that was violated (MW/min)
     total_ramp_violation::Sparse2DAccumulator{Float64}
     generator_unavailability::Sparse3DAccumulator{Bool}
     regional_ramp_infeasibility::Sparse3DAccumulator{Float64}  # Regional ramp feasibility violations
@@ -505,6 +513,8 @@ function PRASCore.Results.finalize(
         system.timestamps,
         system.generators.names,
         acc.ramp_violation,
+        acc.ramp_required,
+        acc.ramp_limit,
         acc.total_ramp_violation,
         acc.generator_unavailability,
         acc.regional_ramp_infeasibility,
@@ -739,15 +749,21 @@ function PRASCore.Simulations.record!(
             ramp_rate = dispatch_change / time_difference.value
 
             # Check for violations
-            if limits.can_ramp
+            if limits.can_ramp &&
+               !(current_generation[gen_idx] ≈ 0.0) &&
+               !(acc.previous_generation[gen_idx] ≈ 0.0)
                 # Generator is ramping - check against ramp limits
                 if ramp_rate > limits.up
                     violation = ramp_rate - limits.up
                     acc.ramp_violation[gen_idx, t, sampleid] = violation
+                    acc.ramp_required[gen_idx, t, sampleid] = ramp_rate
+                    acc.ramp_limit[gen_idx, t, sampleid] = limits.up
                     total_violation += violation
                 elseif -ramp_rate > limits.down
                     violation = -ramp_rate - limits.down
                     acc.ramp_violation[gen_idx, t, sampleid] = violation
+                    acc.ramp_required[gen_idx, t, sampleid] = -ramp_rate  # Store as positive (magnitude)
+                    acc.ramp_limit[gen_idx, t, sampleid] = limits.down
                     total_violation += violation
                 end
             end

@@ -44,78 +44,10 @@ function print_ramp_violation_diagnostics(
     println("Mean violation: $(mean(ramp_violations.ramp_violation.value)) MW")
     println("Median violation: $(median(ramp_violations.ramp_violation.value)) MW")
 
-    # Only show percentiles if we have enough data
-    if total_violations >= 10
-        println(
-            "90th percentile: $(quantile(ramp_violations.ramp_violation.value, 0.9)) MW",
-        )
-        println(
-            "99th percentile: $(quantile(ramp_violations.ramp_violation.value, 0.99)) MW",
-        )
-    end
-
     # Plot violation distribution
     println("\nViolation Magnitude Histogram:")
     nbins = min(30, max(10, total_violations ÷ 100))
     println(UnicodePlots.histogram(ramp_violations.ramp_violation.value, nbins=nbins))
-
-    # Plot log-scale for better visibility if there's a long tail
-    if max_violation > 10 * median(ramp_violations.ramp_violation.value)
-        println("\nLog-scale Violation Histogram:")
-        log_violations = log10.(ramp_violations.ramp_violation.value .+ 1e-6)
-        println(UnicodePlots.histogram(log_violations, nbins=nbins, xlabel="log10(MW)"))
-    end
-
-    # Count violations per generator
-    gen_violation_counts = Dict{Int, Int}()
-    gen_violation_sums = Dict{Int, Float64}()
-    for (i, gen_idx) in enumerate(ramp_violations.ramp_violation.idx)
-        gen_violation_counts[gen_idx] = get(gen_violation_counts, gen_idx, 0) + 1
-        gen_violation_sums[gen_idx] =
-            get(gen_violation_sums, gen_idx, 0.0) + ramp_violations.ramp_violation.value[i]
-    end
-
-    # Top generators by total violation
-    println("\nTop 10 Generators by Total Violation (MW):")
-    sorted_gens_by_sum = sort(collect(gen_violation_sums), by=x -> x[2], rev=true)[1:min(
-        10,
-        length(gen_violation_sums),
-    )]
-    for (gen_idx, total_violation) in sorted_gens_by_sum
-        gen_name = ramp_violations.generators[gen_idx]
-        count = gen_violation_counts[gen_idx]
-        avg_violation = total_violation / count
-        println(
-            "  $gen_name (idx $gen_idx): $(round(total_violation, digits=2)) MW total, $count violations, $(round(avg_violation, digits=2)) MW avg",
-        )
-    end
-
-    # Top generators by violation count with ramp limit info
-    println("\nTop 10 Generators by Violation Count:")
-    sorted_gens_by_count =
-        sort(collect(gen_violation_counts), by=x -> x[2], rev=true)[1:min(
-            10,
-            length(gen_violation_counts),
-        )]
-    for (gen_idx, count) in sorted_gens_by_count
-        gen_name = ramp_violations.generators[gen_idx]
-        gen = PSY.get_component(PSY.Generator, sys, gen_name)
-        total_violation = gen_violation_sums[gen_idx]
-        avg_violation = total_violation / count
-
-        # Get ramp limits if available
-        ramp_info = ""
-        if isa(gen, Union{PSY.ThermalGen, PSY.HydroDispatch})
-            ramp_limits = PSY.get_ramp_limits(gen)
-            ramp_info = " (ramp: ↑$(round(ramp_limits.up, digits=4)) ↓$(round(ramp_limits.down, digits=4)) MW/min)"
-        elseif isa(gen, PSY.RenewableDispatch)
-            ramp_info = " (renewable dispatch)"
-        end
-
-        println(
-            "  $gen_name (idx $gen_idx): $count violations, $(round(total_violation, digits=2)) MW total, $(round(avg_violation, digits=2)) MW avg$ramp_info",
-        )
-    end
 
     # Violations over time
     println("\nViolations by Timestep:")
@@ -133,16 +65,6 @@ function print_ramp_violation_diagnostics(
         ),
     )
 
-    # Sample-wise violations
-    println("\nTotal Violation per Sample:")
-    sample_violations = ramp_violations.total_ramp_violation.value
-    if length(sample_violations) > 0
-        println("  Min: $(round(minimum(sample_violations), digits=2)) MW")
-        println("  Max: $(round(maximum(sample_violations), digits=2)) MW")
-        println("  Mean: $(round(mean(sample_violations), digits=2)) MW")
-        println("  Median: $(round(median(sample_violations), digits=2)) MW")
-    end
-
     # Show top violations with required vs limit details
     println("\nTop 10 Largest Violations (with required vs limit):")
     # Create vector of tuples: (violation, gen_idx, required, limit, time, sample)
@@ -158,56 +80,17 @@ function print_ramp_violation_diagnostics(
     ]
     sort!(violation_details, by=x -> x[1], rev=true)
 
-    for (i, (violation, gen_idx, required, limit, time, sample)) in enumerate(violation_details[1:min(10, length(violation_details))])
+    for (i, (violation, gen_idx, required, limit, time, sample)) in
+        enumerate(violation_details[1:min(10, length(violation_details))])
         gen_name = ramp_violations.generators[gen_idx]
         ratio = required / limit
-        println(
-            "  #$i: $gen_name at t=$time, sample=$sample",
-        )
+        println("  #$i: $gen_name at t=$time, sample=$sample")
         println(
             "      Required: $(round(required, digits=4)) MW/min, Limit: $(round(limit, digits=4)) MW/min",
         )
         println(
             "      Violation: $(round(violation, digits=4)) MW/min ($(round(ratio, digits=2))x over limit)",
         )
-    end
-
-    # Analysis of large violations
-    println("\nAnalysis of Large Violations (> 1 MW/min):")
-    large_violations = filter(x -> x > 1.0, ramp_violations.ramp_violation.value)
-    if length(large_violations) > 0
-        println("  Count of violations > 1 MW/min: $(length(large_violations))")
-        println(
-            "  Percentage of total: $(round(100 * length(large_violations) / total_violations, digits=2))%",
-        )
-        println("  Mean of large violations: $(round(mean(large_violations), digits=2)) MW/min")
-
-        # Find generators with large violations
-        large_violation_gens = Dict{Int, Int}()
-        for (i, val) in enumerate(ramp_violations.ramp_violation.value)
-            if val > 1.0
-                gen_idx = ramp_violations.ramp_violation.idx[i]
-                large_violation_gens[gen_idx] = get(large_violation_gens, gen_idx, 0) + 1
-            end
-        end
-
-        println("\n  Generators with most large violations (> 1 MW/min):")
-        sorted_large = sort(collect(large_violation_gens), by=x -> x[2], rev=true)[1:min(
-            5,
-            length(large_violation_gens),
-        )]
-        for (gen_idx, count) in sorted_large
-            gen_name = ramp_violations.generators[gen_idx]
-            gen = PSY.get_component(PSY.Generator, sys, gen_name)
-            if isa(gen, Union{PSY.ThermalGen, PSY.HydroDispatch})
-                ramp_limits = PSY.get_ramp_limits(gen)
-                println(
-                    "    $gen_name: $count large violations (ramp limits: ↑$(round(ramp_limits.up, digits=4)) ↓$(round(ramp_limits.down, digits=4)) MW/min)",
-                )
-            else
-                println("    $gen_name: $count large violations")
-            end
-        end
     end
 
     # Regional ramp infeasibility analysis

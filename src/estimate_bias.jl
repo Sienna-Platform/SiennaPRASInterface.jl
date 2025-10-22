@@ -29,42 +29,6 @@ function my_disaggregation(
     # Return vector of length(gen_idxs) with dispatch for each generator
 end
 ```
-
-# Example Usage
-
-```julia
-using SiennaPRASInterface
-using PowerSystems
-using PRASCore
-
-# Load PowerSystems system
-sys = System("path/to/system.json")
-
-# Define custom disaggregation (e.g., merit order)
-function merit_order_disaggregation(region_dispatch, gen_idxs, system, state, t)
-    gen_dispatch = zeros(Float64, length(gen_idxs))
-    remaining_dispatch = region_dispatch
-
-    # Sort by marginal cost (would need to be passed in or retrieved)
-    # Dispatch in merit order up to capacity
-    for (i, gen_idx) in enumerate(gen_idxs)
-        if state.gens_available[gen_idx] && remaining_dispatch > 0
-            capacity = system.generators.capacity[gen_idx, t]
-            gen_dispatch[i] = min(capacity, remaining_dispatch)
-            remaining_dispatch -= gen_dispatch[i]
-        end
-    end
-
-    return gen_dispatch
-end
-
-# Create RampViolations with custom disaggregation
-ramp_violations = RampViolations(sys; disaggregation_func=merit_order_disaggregation)
-
-# Run assessment
-method = SequentialMonteCarlo(samples=1000)
-result = assess(sys, method, Shortfall(), ramp_violations)
-```
 """
 
 using PowerSystems
@@ -84,6 +48,9 @@ import ..build_component_to_formulation
 import ..generate_pras_system
 import ..RATemplate
 import ..SPIOutageResult
+
+# Import cost evaluation utilities
+include("util/cost_evaluation.jl")
 
 """
     DisaggregationFunction
@@ -191,7 +158,7 @@ function merit_order_disaggregation(
 
         # Get marginal cost from PowerSystems
         generator = PSY.get_component(PSY.Generator, sys, gen_name)
-        marginal_cost = get_marginal_cost(generator)
+        marginal_cost = get_marginal_cost_at_max_power(generator)
 
         push!(available_gens, (i, marginal_cost, capacity))
     end
@@ -295,89 +262,6 @@ function ramp_aware_disaggregation(
     return gen_dispatch
 end
 
-"""
-    get_marginal_cost(generator::PSY.Generator)
-
-Extract marginal cost from a PowerSystems generator.
-
-Returns a cost estimate in \$/MWh for merit order dispatch.
-Handles different generator types and cost curve structures.
-"""
-function get_marginal_cost(generator::PSY.Generator)
-    # Try to get operation cost
-    if !isa(generator, Union{PSY.ThermalGen, PSY.HydroDispatch})
-        # Renewable generators - assume zero marginal cost
-        return 0.0
-    end
-
-    op_cost = PSY.get_operation_cost(generator)
-
-    if isa(op_cost, PSY.ThermalGenerationCost)
-        variable_cost = PSY.get_variable(op_cost)
-
-        if isa(variable_cost, PSY.CostCurve)
-            # Get the cost curve
-            curve = PSY.get_value_curve(variable_cost)
-
-            if isa(curve, PSY.LinearCurve)
-                # Linear curve: cost = proportional_term * P + constant_term
-                return curve.proportional_term
-            elseif isa(curve, PSY.QuadraticCurve)
-                # Quadratic curve: use cost at mid-point as approximation
-                # cost = a*P^2 + b*P + c, marginal cost ≈ b + 2*a*P_mid
-                p_mid = PSY.get_max_active_power(generator) / 2.0
-                return curve.proportional_term + 2.0 * curve.quadratic_term * p_mid
-            elseif isa(curve, PSY.PiecewiseIncrementalCurve)
-                # Use the first segment's slope as marginal cost
-                points = PSY.get_points(curve)
-                if length(points) >= 2
-                    return points[2].y / points[2].x  # Slope of first segment
-                end
-            elseif isa(curve, PSY.PiecewisePointCurve)
-                # Use average slope of first two points
-                points = PSY.get_points(curve)
-                if length(points) >= 2
-                    return (points[2].y - points[1].y) / (points[2].x - points[1].x)
-                end
-            end
-        elseif isa(variable_cost, PSY.FuelCurve)
-            # Fuel curve - approximate with fuel cost
-            fuel_cost = PSY.get_fuel_cost(variable_cost)
-            # Use a typical heat rate of 10 MMBtu/MWh for thermal plants
-            return fuel_cost * 10.0
-        end
-    elseif isa(op_cost, PSY.HydroGenerationCost)
-        # Hydro - typically low marginal cost
-        return 5.0  # \$/MWh as a reasonable default
-    end
-
-    # Fallback: use a default based on generator type
-    if isa(generator, PSY.ThermalGen)
-        fuel = PSY.get_fuel(generator)
-        prime_mover = PSY.get_prime_mover_type(generator)
-
-        # Rough cost estimates by fuel type
-        if fuel == PSY.ThermalFuels.NUCLEAR
-            return 10.0
-        elseif fuel == PSY.ThermalFuels.COAL
-            return 30.0
-        elseif fuel == PSY.ThermalFuels.NATURAL_GAS
-            if prime_mover == PSY.PrimeMovers.CC  # Combined cycle
-                return 40.0
-            elseif prime_mover == PSY.PrimeMovers.CT  # Combustion turbine (peaker)
-                return 80.0
-            else
-                return 50.0
-            end
-        elseif fuel == PSY.ThermalFuels.DISTILLATE_FUEL_OIL
-            return 100.0
-        else
-            return 50.0  # Generic thermal
-        end
-    end
-
-    return 50.0  # Generic fallback
-end
 
 struct RampViolations <: PRASCore.Results.ResultSpec
     sys::PSY.System
@@ -861,6 +745,39 @@ Reset accumulator for next simulation sample.
 """
 function PRASCore.Simulations.reset!(::RampViolationsAccumulator, ::Int)
     return
+end
+
+function count_outage_transitions(result::RampViolationsResult)
+    # Build a dictionary to track unavailability by (gen_idx, time, sample)
+    unavail_dict = Dict{Tuple{Int64, Int64, Int64}, Bool}()
+
+    for i in eachindex(result.generator_unavailability.idx)
+        idx = result.generator_unavailability.idx[i]
+        time = result.generator_unavailability.time[i]
+        sampleid = result.generator_unavailability.sampleid[i]
+        is_unavail = result.generator_unavailability.value[i]
+
+        unavail_dict[(idx, time, sampleid)] = is_unavail
+    end
+
+    outage_counts = Dict{Int64, Int64}()
+    sample_ids = unique(result.generator_unavailability.sampleid)
+
+    for sample_id in sample_ids
+        total_outages = 0
+        for gen_idx in 1:length(result.generators)
+            for t in 2:length(result.timestamps)
+                was_available = !get(unavail_dict, (gen_idx, t - 1, sample_id), false)
+                is_available = !get(unavail_dict, (gen_idx, t, sample_id), false)
+                if was_available && !is_available
+                    total_outages += 1
+                end
+            end
+        end
+        outage_counts[sample_id] = total_outages
+    end
+
+    return outage_counts
 end
 
 """

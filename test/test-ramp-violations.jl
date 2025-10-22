@@ -14,6 +14,24 @@ const PSCB = PowerSystemCaseBuilder
 
 include("rts_gmlc.jl")
 
+function print_outage_statistics(result::RampViolationsResult)
+    outage_counts = SiennaPRASInterface.count_outage_transitions(result)
+
+    if isempty(outage_counts)
+        println("No outage data available.")
+        return
+    end
+
+    counts = collect(values(outage_counts))
+
+    println("=== Outage Transition Statistics:")
+    println("  Total samples: ", length(outage_counts))
+    println("  Mean outages per sample: ", round(sum(counts) / length(counts), digits=2))
+    println("  Min outages: ", minimum(counts))
+    println("  Max outages: ", maximum(counts))
+    println("  Total outages: ", sum(counts))
+end
+
 """
     print_ramp_violation_diagnostics(ramp_violations, sys, title)
 
@@ -199,20 +217,13 @@ function create_ramp_violation_test_system()
         modified_count += 1
         limits = PSY.get_ramp_limits(gen)
         if isnan(limits.up) || isnan(limits.down)
-            println(
-                "WARNING: $(PSY.get_name(gen)) has NaN ramp limits: up=$(limits.up), down=$(limits.down)",
-            )
+            @warn "$(PSY.get_name(gen)) has NaN ramp limits: up=$(limits.up), down=$(limits.down)"
             nan_count += 1
         end
     end
-    if nan_count == 0
-        println(
-            "Modified $modified_count thermal generators with valid ramp limits (skipped synchronous condensers)",
-        )
-    else
-        println("ERROR: $nan_count generators have NaN ramp limits!")
+    if nan_count != 0
+        error("$nan_count generators have NaN ramp limits!")
     end
-    println("=========================\n")
 
     for gen in PSY.get_components(PSY.RenewableGen, sys)
         PowerSystems.set_available!(gen, false)
@@ -296,6 +307,7 @@ end
             @test all(ramp_violations.ramp_violation.sampleid .<= 2)
 
             # Print diagnostics
+            print_outage_statistics(ramp_violations)
             print_ramp_violation_diagnostics(
                 ramp_violations,
                 rts_sys,
@@ -342,6 +354,7 @@ end
             @test all(ramp_violations_merit.ramp_violation.sampleid .<= 2)
 
             # Print diagnostics
+            print_outage_statistics(ramp_violations)
             print_ramp_violation_diagnostics(
                 ramp_violations_merit,
                 rts_sys,
@@ -387,6 +400,7 @@ end
             @test all(ramp_violations_ramp.ramp_violation.sampleid .<= 2)
 
             # Print diagnostics
+            print_outage_statistics(ramp_violations)
             print_ramp_violation_diagnostics(
                 ramp_violations_ramp,
                 rts_sys,
@@ -428,6 +442,7 @@ end
             @test all(ramp_violations.ramp_violation.sampleid .<= 2)
 
             # Print diagnostics
+            print_outage_statistics(ramp_violations)
             print_ramp_violation_diagnostics(
                 ramp_violations,
                 rts_sys,
@@ -474,6 +489,7 @@ end
             @test all(ramp_violations_merit.ramp_violation.sampleid .<= 2)
 
             # Print diagnostics
+            print_outage_statistics(ramp_violations)
             print_ramp_violation_diagnostics(
                 ramp_violations_merit,
                 rts_sys,
@@ -520,6 +536,7 @@ end
             @test all(ramp_violations_ramp.ramp_violation.sampleid .<= 2)
 
             # Print diagnostics
+            print_outage_statistics(ramp_violations)
             print_ramp_violation_diagnostics(
                 ramp_violations_ramp,
                 rts_sys,

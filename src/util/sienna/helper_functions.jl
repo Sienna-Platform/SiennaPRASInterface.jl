@@ -146,6 +146,7 @@ end
 function get_outage_time_series_data(
     gen::Union{PSY.StaticInjection, PSY.Branch},
     s2p_meta::S2P_metadata,
+    add_default_for::Bool=false,
 )
     # Get GeometricForcedOutage SupplementalAttribute of the generator g
     outage_sup_attrs =
@@ -174,7 +175,13 @@ function get_outage_time_series_data(
             return fill(λ, s2p_meta.N), fill(μ, s2p_meta.N)
         end
     else
-        @warn "No GeometricForcedOutage SupplementalAttribute available for $(PSY.get_name(gen)) of $(typeof(gen)). Using nominal outage and recovery probabilities for this component."
-        return zeros(Float64, s2p_meta.N), ones(Float64, s2p_meta.N)
+        if (add_default_for)
+            @warn "Adding default transition probabilities for $(PSY.get_name(gen)) of $(typeof(gen))."
+            (λ, μ) = rate_to_probability(0.05, 24)
+            return fill(λ, s2p_meta.N), fill(μ, s2p_meta.N)
+        else
+            @warn "No GeometricForcedOutage SupplementalAttribute available for $(PSY.get_name(gen)) of $(typeof(gen)). Using nominal outage and recovery probabilities for this component."
+            return zeros(Float64, s2p_meta.N), ones(Float64, s2p_meta.N)
+        end
     end
 end

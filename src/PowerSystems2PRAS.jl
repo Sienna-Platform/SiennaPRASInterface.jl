@@ -336,7 +336,11 @@ function process_generators(
             end
         end
 
-        λ_gen[idx, :], μ_gen[idx, :] = get_outage_time_series_data(g, s2p_meta)
+        λ_gen[idx, :], μ_gen[idx, :] = get_outage_time_series_data(
+            g,
+            s2p_meta,
+            get_add_default_transition_probabilities(component_to_formulation[g]),
+        )
     end
 
     return PRASCore.Generators{
@@ -411,7 +415,11 @@ function process_storage(
             view(stor_dischrg_eff_array, idx, :),
         )
 
-        λ_stor[idx, :], μ_stor[idx, :] = get_outage_time_series_data(s, s2p_meta)
+        λ_stor[idx, :], μ_stor[idx, :] = get_outage_time_series_data(
+            s,
+            s2p_meta,
+            get_add_default_transition_probabilities(component_to_formulation[s]),
+        )
     end
 
     stor_cryovr_eff = ones(n_stor, s2p_meta.N)   # Not currently available/ defined in PowerSystems
@@ -577,7 +585,11 @@ function process_genstorage(
             view(gen_stor_gridinj_cap_array, idx, :),
         )
 
-        λ_genstors[idx, :], μ_genstors[idx, :] = get_outage_time_series_data(g_s, s2p_meta)
+        λ_genstors[idx, :], μ_genstors[idx, :] = get_outage_time_series_data(
+            g_s,
+            s2p_meta,
+            get_add_default_transition_probabilities(component_to_formulation[g_s]),
+        )
     end
 
     gen_stor_gridwdr_cap_array = zeros(Int64, n_genstors, s2p_meta.N) # Not currently available/ defined in PowerSystems

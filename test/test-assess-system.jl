@@ -47,6 +47,15 @@ end
                 lump_renewable_generation=true,
             ),
         )
+        SiennaPRASInterface.set_device_model!(
+            template,
+            DeviceRAModel(
+                PSY.RenewableDispatch,
+                GeneratorPRAS,
+                lump_renewable_generation=true,
+                add_default_transition_probabilities=true,
+            ),
+        )
 
         shortfalls, = SiennaPRASInterface.assess(
             rts_da_sys,

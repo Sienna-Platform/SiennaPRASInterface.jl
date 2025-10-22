@@ -38,7 +38,6 @@ using TimeSeries
 using PRASCore
 
 using Dates: Hour, AbstractTime
-using Infiltrator
 
 const PSY = PowerSystems
 

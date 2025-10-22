@@ -231,6 +231,49 @@ function create_ramp_violation_test_system()
     return sys
 end
 
+"""
+    test_disaggregation_method(rts_sys, disagg_func, title_suffix, expect_violations)
+
+Helper function to test a single disaggregation method and reduce code duplication.
+"""
+function test_disaggregation_method(rts_sys, disagg_func, title_suffix, expect_violations)
+    sequential_monte_carlo = SiennaPRASInterface.SequentialMonteCarlo(samples=2, seed=1)
+
+    shortfalls, ramp_violations = SiennaPRASInterface.assess(
+        rts_sys,
+        PSY.Area,
+        sequential_monte_carlo,
+        SiennaPRASInterface.Shortfall(),
+        RampViolations(rts_sys, disaggregation_func=disagg_func),
+    )
+
+    # Test result types
+    @test shortfalls isa SiennaPRASInterface.PRASCore.Results.ShortfallResult
+    @test ramp_violations isa RampViolationsResult
+    @test ramp_violations.ramp_violation isa SiennaPRASInterface.Sparse3DAccumulator
+    @test ramp_violations.total_ramp_violation isa SiennaPRASInterface.Sparse2DAccumulator
+
+    # Test violation data properties
+    if length(ramp_violations.ramp_violation.value) > 0
+        @test all(ramp_violations.ramp_violation.value .> 0.0)
+        @test all(ramp_violations.ramp_violation.sampleid .>= 1)
+        @test all(ramp_violations.ramp_violation.sampleid .<= 2)
+    end
+
+    # Print diagnostics
+    print_outage_statistics(ramp_violations)
+    print_ramp_violation_diagnostics(ramp_violations, rts_sys, title_suffix)
+
+    # Validate expectations
+    if expect_violations
+        @test maximum(ramp_violations.ramp_violation.value) > 0.0
+        @test length(ramp_violations.ramp_violation.value) > 0
+    else
+        @test length(ramp_violations.ramp_violation.value) == 0 ||
+              minimum(ramp_violations.ramp_violation.value) > 0.0
+    end
+end
+
 @testset "Ramp Violation Tests" begin
     @testset "RampViolations struct creation" begin
         # Create a simple PowerSystems system
@@ -275,52 +318,18 @@ end
     end
 
     @testset "RampViolations with assess() using original RTS-GMLC" begin
-        # Use the original RTS-GMLC test system
         rts_sys = get_rts_gmlc_outage("DA")
 
-        # Create a sequential Monte Carlo method with a small number of samples for testing
-        sequential_monte_carlo = SiennaPRASInterface.SequentialMonteCarlo(samples=2, seed=1)
-
-        # Test that we can run assess() with RampViolations alongside Shortfall
         @testset "assess with RampViolations (proportional)" begin
-            shortfalls, ramp_violations = SiennaPRASInterface.assess(
+            test_disaggregation_method(
                 rts_sys,
-                PSY.Area,
-                sequential_monte_carlo,
-                SiennaPRASInterface.Shortfall(),
-                RampViolations(rts_sys),
-            )
-
-            # Test that we got the expected result types
-            @test shortfalls isa SiennaPRASInterface.PRASCore.Results.ShortfallResult
-            @test ramp_violations isa RampViolationsResult
-
-            # Test basic properties of the RampViolationsResult
-            @test length(ramp_violations.timestamps) > 0
-            @test ramp_violations.ramp_violation isa SiennaPRASInterface.Sparse3DAccumulator
-            @test ramp_violations.total_ramp_violation isa
-                  SiennaPRASInterface.Sparse2DAccumulator
-
-            # Test that violation data is non-negative (violation magnitude should be >= 0)
-            @test all(ramp_violations.ramp_violation.value .> 0.0)
-            @test all(ramp_violations.ramp_violation.sampleid .>= 1)
-            @test all(ramp_violations.ramp_violation.sampleid .<= 2)
-
-            # Print diagnostics
-            print_outage_statistics(ramp_violations)
-            print_ramp_violation_diagnostics(
-                ramp_violations,
-                rts_sys,
+                SiennaPRASInterface.proportional_disaggregation,
                 "Ramp Violation Summary (Original RTS-GMLC - Proportional)",
+                false,
             )
-
-            # With normal RTS ramp limits, violations should exist but structure should be valid
-            @test length(ramp_violations.ramp_violation.value) == 0 ||
-                  minimum(ramp_violations.ramp_violation.value) > 0.0
         end
 
         @testset "assess with RampViolations (merit order)" begin
-            # Create wrapper function that captures sys in closure
             merit_order_wrapper =
                 (region_dispatch, gen_idxs, system, state, t) ->
                     SiennaPRASInterface.merit_order_disaggregation(
@@ -332,41 +341,15 @@ end
                         rts_sys,
                     )
 
-            shortfalls, ramp_violations_merit = SiennaPRASInterface.assess(
+            test_disaggregation_method(
                 rts_sys,
-                PSY.Area,
-                sequential_monte_carlo,
-                SiennaPRASInterface.Shortfall(),
-                RampViolations(rts_sys, disaggregation_func=merit_order_wrapper),
-            )
-
-            # Test that we got the expected result types
-            @test shortfalls isa SiennaPRASInterface.PRASCore.Results.ShortfallResult
-            @test ramp_violations_merit isa RampViolationsResult
-            @test ramp_violations_merit.ramp_violation isa
-                  SiennaPRASInterface.Sparse3DAccumulator
-            @test ramp_violations_merit.total_ramp_violation isa
-                  SiennaPRASInterface.Sparse2DAccumulator
-
-            # Test that violation data is non-negative (violation magnitude should be >= 0)
-            @test all(ramp_violations_merit.ramp_violation.value .> 0.0)
-            @test all(ramp_violations_merit.ramp_violation.sampleid .>= 1)
-            @test all(ramp_violations_merit.ramp_violation.sampleid .<= 2)
-
-            # Print diagnostics
-            print_outage_statistics(ramp_violations)
-            print_ramp_violation_diagnostics(
-                ramp_violations_merit,
-                rts_sys,
+                merit_order_wrapper,
                 "Ramp Violation Summary (Original RTS-GMLC - Merit Order)",
+                false,
             )
-
-            @test length(ramp_violations_merit.ramp_violation.value) == 0 ||
-                  minimum(ramp_violations_merit.ramp_violation.value) > 0.0
         end
 
         @testset "assess with RampViolations (ramp-aware)" begin
-            # Create wrapper function that captures sys in closure
             ramp_aware_wrapper =
                 (region_dispatch, gen_idxs, system, state, t) ->
                     SiennaPRASInterface.ramp_aware_disaggregation(
@@ -378,84 +361,28 @@ end
                         rts_sys,
                     )
 
-            shortfalls, ramp_violations_ramp = SiennaPRASInterface.assess(
+            test_disaggregation_method(
                 rts_sys,
-                PSY.Area,
-                sequential_monte_carlo,
-                SiennaPRASInterface.Shortfall(),
-                RampViolations(rts_sys, disaggregation_func=ramp_aware_wrapper),
-            )
-
-            # Test that we got the expected result types
-            @test shortfalls isa SiennaPRASInterface.PRASCore.Results.ShortfallResult
-            @test ramp_violations_ramp isa RampViolationsResult
-            @test ramp_violations_ramp.ramp_violation isa
-                  SiennaPRASInterface.Sparse3DAccumulator
-            @test ramp_violations_ramp.total_ramp_violation isa
-                  SiennaPRASInterface.Sparse2DAccumulator
-
-            # Test that violation data is non-negative (violation magnitude should be >= 0)
-            @test all(ramp_violations_ramp.ramp_violation.value .> 0.0)
-            @test all(ramp_violations_ramp.ramp_violation.sampleid .>= 1)
-            @test all(ramp_violations_ramp.ramp_violation.sampleid .<= 2)
-
-            # Print diagnostics
-            print_outage_statistics(ramp_violations)
-            print_ramp_violation_diagnostics(
-                ramp_violations_ramp,
-                rts_sys,
+                ramp_aware_wrapper,
                 "Ramp Violation Summary (Original RTS-GMLC - Ramp-Aware)",
+                false,
             )
-
-            @test length(ramp_violations_ramp.ramp_violation.value) == 0 ||
-                  minimum(ramp_violations_ramp.ramp_violation.value) > 0.0
         end
     end
 
     @testset "RampViolations with assess() using modified RTS-GMLC" begin
-        # Use our modified RTS-GMLC test system designed for ramp violations
         rts_sys = create_ramp_violation_test_system()
 
-        # Create a sequential Monte Carlo method with a very very small number of samples for testing
-        sequential_monte_carlo = SiennaPRASInterface.SequentialMonteCarlo(samples=2, seed=1)
-
-        # Test that we can run assess() with RampViolations alongside Shortfall
         @testset "assess with RampViolations (proportional)" begin
-            shortfalls, ramp_violations = SiennaPRASInterface.assess(
+            test_disaggregation_method(
                 rts_sys,
-                PSY.Area,
-                sequential_monte_carlo,
-                SiennaPRASInterface.Shortfall(),
-                RampViolations(rts_sys),
-            )
-
-            # Test that we got the expected result types
-            @test shortfalls isa SiennaPRASInterface.PRASCore.Results.ShortfallResult
-            @test ramp_violations isa RampViolationsResult
-            @test ramp_violations.ramp_violation isa SiennaPRASInterface.Sparse3DAccumulator
-            @test ramp_violations.total_ramp_violation isa
-                  SiennaPRASInterface.Sparse2DAccumulator
-
-            # Test that violation data is non-negative (violation magnitude should be >= 0)
-            @test all(ramp_violations.ramp_violation.value .> 0.0)
-            @test all(ramp_violations.ramp_violation.sampleid .>= 1)
-            @test all(ramp_violations.ramp_violation.sampleid .<= 2)
-
-            # Print diagnostics
-            print_outage_statistics(ramp_violations)
-            print_ramp_violation_diagnostics(
-                ramp_violations,
-                rts_sys,
+                SiennaPRASInterface.proportional_disaggregation,
                 "Ramp Violation Summary (Modified RTS-GMLC with Tight Limits - Proportional)",
+                true,
             )
-
-            # We expect to see violations with our tight limits
-            @test maximum(ramp_violations.ramp_violation.value) > 0.0
-            @test length(ramp_violations.ramp_violation.value) > 0
         end
 
         @testset "assess with RampViolations (merit order)" begin
-            # Create wrapper function that captures sys in closure
             merit_order_wrapper =
                 (region_dispatch, gen_idxs, system, state, t) ->
                     SiennaPRASInterface.merit_order_disaggregation(
@@ -467,42 +394,15 @@ end
                         rts_sys,
                     )
 
-            shortfalls, ramp_violations_merit = SiennaPRASInterface.assess(
+            test_disaggregation_method(
                 rts_sys,
-                PSY.Area,
-                sequential_monte_carlo,
-                SiennaPRASInterface.Shortfall(),
-                RampViolations(rts_sys, disaggregation_func=merit_order_wrapper),
-            )
-
-            # Test that we got the expected result types
-            @test shortfalls isa SiennaPRASInterface.PRASCore.Results.ShortfallResult
-            @test ramp_violations_merit isa RampViolationsResult
-            @test ramp_violations_merit.ramp_violation isa
-                  SiennaPRASInterface.Sparse3DAccumulator
-            @test ramp_violations_merit.total_ramp_violation isa
-                  SiennaPRASInterface.Sparse2DAccumulator
-
-            # Test that violation data is non-negative (violation magnitude should be >= 0)
-            @test all(ramp_violations_merit.ramp_violation.value .> 0.0)
-            @test all(ramp_violations_merit.ramp_violation.sampleid .>= 1)
-            @test all(ramp_violations_merit.ramp_violation.sampleid .<= 2)
-
-            # Print diagnostics
-            print_outage_statistics(ramp_violations)
-            print_ramp_violation_diagnostics(
-                ramp_violations_merit,
-                rts_sys,
+                merit_order_wrapper,
                 "Ramp Violation Summary (Modified RTS-GMLC with Tight Limits - Merit Order)",
+                true,
             )
-
-            # We expect to see violations with our tight limits
-            @test maximum(ramp_violations_merit.ramp_violation.value) > 0.0
-            @test length(ramp_violations_merit.ramp_violation.value) > 0
         end
 
         @testset "assess with RampViolations (ramp-aware)" begin
-            # Create wrapper function that captures sys in closure
             ramp_aware_wrapper =
                 (region_dispatch, gen_idxs, system, state, t) ->
                     SiennaPRASInterface.ramp_aware_disaggregation(
@@ -514,38 +414,12 @@ end
                         rts_sys,
                     )
 
-            shortfalls, ramp_violations_ramp = SiennaPRASInterface.assess(
+            test_disaggregation_method(
                 rts_sys,
-                PSY.Area,
-                sequential_monte_carlo,
-                SiennaPRASInterface.Shortfall(),
-                RampViolations(rts_sys, disaggregation_func=ramp_aware_wrapper),
-            )
-
-            # Test that we got the expected result types
-            @test shortfalls isa SiennaPRASInterface.PRASCore.Results.ShortfallResult
-            @test ramp_violations_ramp isa RampViolationsResult
-            @test ramp_violations_ramp.ramp_violation isa
-                  SiennaPRASInterface.Sparse3DAccumulator
-            @test ramp_violations_ramp.total_ramp_violation isa
-                  SiennaPRASInterface.Sparse2DAccumulator
-
-            # Test that violation data is non-negative (violation magnitude should be >= 0)
-            @test all(ramp_violations_ramp.ramp_violation.value .> 0.0)
-            @test all(ramp_violations_ramp.ramp_violation.sampleid .>= 1)
-            @test all(ramp_violations_ramp.ramp_violation.sampleid .<= 2)
-
-            # Print diagnostics
-            print_outage_statistics(ramp_violations)
-            print_ramp_violation_diagnostics(
-                ramp_violations_ramp,
-                rts_sys,
+                ramp_aware_wrapper,
                 "Ramp Violation Summary (Modified RTS-GMLC with Tight Limits - Ramp-Aware)",
+                true,
             )
-
-            # We expect to see violations with our tight limits
-            @test maximum(ramp_violations_ramp.ramp_violation.value) > 0.0
-            @test length(ramp_violations_ramp.ramp_violation.value) > 0
         end
     end
 end

@@ -67,7 +67,6 @@ export RampViolationsAccumulator
 export proportional_disaggregation
 export merit_order_disaggregation
 export ramp_aware_disaggregation
-export get_marginal_cost
 
 # Line overloading exports
 export PowerFlowWithOverloads
@@ -234,80 +233,6 @@ function PRASCore.assess(
 )
     pras_system = generate_pras_system(sys, DEFAULT_TEMPLATE)
     return PRASCore.assess(pras_system, method, resultsspecs...)
-end
-
-function assess_with_powerflow(
-    sys::PSY.System,
-    template::RATemplate,
-    method::PRASCore.SequentialMonteCarlo,
-    power_flow_evaluator::PFS.PowerFlowEvaluationModel,
-    resultsspecs::PRASCore.Results.ResultSpec...,
-)
-    pras_system = generate_pras_system(sys, template)
-    dispatchproblem = PRASCore.Simulations.DispatchProblem(pras_system)
-    systemstate = PRASCore.Simulations.SystemState(pras_system)
-    recorders = PRASCore.Results.accumulator.(pras_system, method.nsamples, resultsspecs)
-
-    # Create power flow data container with single time step
-    # We'll solve power flow for each time step individually
-    pf_data = PFS.PowerFlowData(power_flow_evaluator, sys; time_steps=1)
-
-    # TODO: Test performance of Philox vs Threefry, choice of rounds
-    # Also consider implementing an efficient Bernoulli trial with direct
-    # mantissa comparison
-    rng = Random123.Philox4x((0, 0), 10)
-
-    N = length(pras_system.timestamps)
-    sampleseeds = 1:(method.nsamples)
-
-    for s in sampleseeds
-        Random.seed!(rng, (method.seed, s))
-        PRASCore.Simulations.initialize!(rng, systemstate, pras_system)
-
-        for t in 1:N
-            PRASCore.Simulations.advance!(rng, systemstate, dispatchproblem, pras_system, t)
-            PRASCore.Simulations.solve!(dispatchproblem, systemstate, pras_system, t)
-            write_output_to_pf_data!(
-                pf_data,
-                dispatchproblem,
-                pras_system,
-                sys,
-                t,
-                systemstate,
-            )
-
-            # Try to solve power flow and track convergence
-            pf_converged = false
-            Logging.with_logger(Logging.NullLogger()) do
-                try
-                    PFS.solve_powerflow!(pf_data; pf=power_flow_evaluator)
-                    pf_converged = true
-                catch e
-                    # Power flow failed to converge - this is expected sometimes
-                    pf_converged = false
-                end
-            end
-
-            # TODO: Track convergence statistics
-            # For now, we continue with PRAS assessment even if power flow fails
-
-            foreach(
-                recorder -> PRASCore.Simulations.record!(
-                    recorder,
-                    pras_system,
-                    systemstate,
-                    dispatchproblem,
-                    s,
-                    t,
-                ),
-                recorders,
-            )
-        end
-
-        foreach(recorder -> PRASCore.Simulations.reset!(recorder, s), recorders)
-    end
-
-    return PRASCore.Results.finalize.(recorders, pras_system)
 end
 
 end

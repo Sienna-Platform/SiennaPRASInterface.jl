@@ -19,6 +19,8 @@ function write_output_to_pf_data!(
     psy_system::PSY.System,
     t::Int,
     state::PRASCore.Simulations.SystemState,
+    generators_cache::Vector{PSY.Generator},
+    ramp_limits_cache::Vector{Union{Nothing, NamedTuple{(:up, :down), Tuple{Float64, Float64}}}},
 )
     # Clear previous data
     fill!(pf_data.bus_activepower_injection, 0.0)
@@ -30,7 +32,7 @@ function write_output_to_pf_data!(
     region_generation = get_generator_region_dispatch(pras_system, state, dispatchproblem, t)
 
     # Get fixed generation (non-dispatchable renewables)
-    fixed_region_generation = get_generator_fixed_dispatch(pras_system, psy_system, state, t)
+    fixed_region_generation = get_generator_fixed_dispatch(pras_system, generators_cache, state, t)
 
     # Total generation includes both dispatchable and fixed
     total_region_generation = region_generation .+ fixed_region_generation
@@ -45,6 +47,8 @@ function write_output_to_pf_data!(
             pras_system,
             state,
             t,
+            generators_cache,
+            ramp_limits_cache,
         )
 
         # Store in global generator array
@@ -60,26 +64,23 @@ function write_output_to_pf_data!(
             if !state.gens_available[gen_idx]
                 continue
             end
-            name = pras_system.generators.names[gen_idx]
-            if isa(PSY.get_component(PSY.Generator, psy_system, name), PSY.RenewableNonDispatch)
+            # Use cached generator object instead of get_component
+            if isa(generators_cache[gen_idx], PSY.RenewableNonDispatch)
                 current_generation[gen_idx] = pras_system.generators.capacity[gen_idx, t]
             end
         end
     end
 
     # Map generator dispatch to bus injections
-    for (gen_idx, gen_name) in enumerate(pras_system.generators.names)
+    for gen_idx in 1:length(pras_system.generators.names)
         dispatch = current_generation[gen_idx]
 
         if dispatch <= 0.0
             continue
         end
 
-        # Get the generator from PowerSystems
-        generator = PSY.get_component(PSY.Generator, psy_system, gen_name)
-        if isnothing(generator)
-            continue
-        end
+        # Use cached generator object
+        generator = generators_cache[gen_idx]
 
         # Get the bus this generator is connected to
         bus = PSY.get_bus(generator)

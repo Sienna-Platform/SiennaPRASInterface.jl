@@ -71,12 +71,14 @@ Function type for disaggregating regional dispatch to individual generators.
 const DisaggregationFunction = Function
 
 """
-    proportional_disaggregation(region_dispatch, gen_idxs, system, state, t)
+    proportional_disaggregation(region_dispatch, gen_idxs, system, state, t, generators_cache, ramp_limits_cache)
 
 Default disaggregation: proportional to available capacity.
 
 Distributes regional dispatch to generators based on their capacity share.
 This is simple but tends to create more ramp violations than optimal dispatch.
+
+Note: This function doesn't use the cache parameters but accepts them for signature compatibility.
 """
 function proportional_disaggregation(
     region_dispatch::Float64,
@@ -84,6 +86,8 @@ function proportional_disaggregation(
     system::PRASCore.SystemModel,
     state::PRASCore.Simulations.SystemState,
     t::Int,
+    generators_cache::Vector{PSY.Generator},
+    ramp_limits_cache::Vector{Union{Nothing, NamedTuple{(:up, :down), Tuple{Float64, Float64}}}},
 )
     gen_dispatch = zeros(Float64, length(gen_idxs))
     total_capacity = 0.0
@@ -109,7 +113,7 @@ function proportional_disaggregation(
 end
 
 """
-    merit_order_disaggregation(region_dispatch, gen_idxs, system, state, t, sys)
+    merit_order_disaggregation(region_dispatch, gen_idxs, system, state, t, generators_cache, ramp_limits_cache)
 
 Merit order disaggregation: dispatch generators in order of marginal cost.
 
@@ -124,7 +128,8 @@ and tends to create fewer ramp violations for baseload plants.
   - `system::PRASCore.SystemModel`: PRAS system model
   - `state::PRASCore.Simulations.SystemState`: Current system state
   - `t::Int`: Current timestep
-  - `sys::PSY.System`: PowerSystems system (for accessing cost data)
+  - `generators_cache::Vector{PSY.Generator}`: Cached generator objects
+  - `ramp_limits_cache::Vector{Union{Nothing, NamedTuple}}`: Cached ramp limits (unused, for signature compatibility)
 
 # Returns
 
@@ -136,7 +141,8 @@ function merit_order_disaggregation(
     system::PRASCore.SystemModel,
     state::PRASCore.Simulations.SystemState,
     t::Int,
-    sys::PSY.System,
+    generators_cache::Vector{PSY.Generator},
+    ramp_limits_cache::Vector{Union{Nothing, NamedTuple{(:up, :down), Tuple{Float64, Float64}}}},
 )
     gen_dispatch = zeros(Float64, length(gen_idxs))
 
@@ -148,15 +154,14 @@ function merit_order_disaggregation(
             continue
         end
 
-        gen_name = system.generators.names[gen_idx]
         capacity = system.generators.capacity[gen_idx, t]
 
         if capacity <= 0.0
             continue
         end
 
-        # Get marginal cost from PowerSystems
-        generator = PSY.get_component(PSY.Generator, sys, gen_name)
+        # Use cached generator object
+        generator = generators_cache[gen_idx]
         marginal_cost = get_marginal_cost_at_max_power(generator)
 
         push!(available_gens, (i, marginal_cost, capacity))
@@ -180,7 +185,7 @@ function merit_order_disaggregation(
 end
 
 """
-    ramp_aware_disaggregation(region_dispatch, gen_idxs, system, state, t, sys)
+    ramp_aware_disaggregation(region_dispatch, gen_idxs, system, state, t, generators_cache, ramp_limits_cache)
 
 Ramp-aware disaggregation: dispatch generators in order of ramp capability.
 
@@ -195,7 +200,8 @@ by using the generators best suited to handle dispatch variations.
   - `system::PRASCore.SystemModel`: PRAS system model
   - `state::PRASCore.Simulations.SystemState`: Current system state
   - `t::Int`: Current timestep
-  - `sys::PSY.System`: PowerSystems system (for accessing ramp limit data)
+  - `generators_cache::Vector{PSY.Generator}`: Cached generator objects
+  - `ramp_limits_cache::Vector{Union{Nothing, NamedTuple}}`: Cached ramp limits
 
 # Returns
 
@@ -207,7 +213,8 @@ function ramp_aware_disaggregation(
     system::PRASCore.SystemModel,
     state::PRASCore.Simulations.SystemState,
     t::Int,
-    sys::PSY.System,
+    generators_cache::Vector{PSY.Generator},
+    ramp_limits_cache::Vector{Union{Nothing, NamedTuple{(:up, :down), Tuple{Float64, Float64}}}},
 )
     gen_dispatch = zeros(Float64, length(gen_idxs))
 
@@ -219,20 +226,20 @@ function ramp_aware_disaggregation(
             continue
         end
 
-        gen_name = system.generators.names[gen_idx]
         capacity = system.generators.capacity[gen_idx, t]
 
         if capacity <= 0.0
             continue
         end
 
-        # Get ramp rates from PowerSystems
-        generator = PSY.get_component(PSY.Generator, sys, gen_name)
+        # Use cached generator object
+        generator = generators_cache[gen_idx]
 
         # Get ramp rate (use min of up/down as limiting factor)
-        if isa(generator, Union{PSY.ThermalGen, PSY.HydroDispatch})
-            ramp_limits = PSY.get_ramp_limits(generator)
-            min_ramp_rate = min(ramp_limits.up, ramp_limits.down)
+        cached_limits = ramp_limits_cache[gen_idx]
+        if !isnothing(cached_limits)
+            # Use cached ramp limits
+            min_ramp_rate = min(cached_limits.up, cached_limits.down)
         elseif isa(generator, PSY.RenewableDispatch)
             # Renewable dispatch is very flexible
             min_ramp_rate = capacity  # Can ramp to full capacity in 1 minute
@@ -344,6 +351,8 @@ mutable struct RampViolationsAccumulator <:
     previous_availability::Vector{Bool}
     regional_ramp_infeasibility::Sparse3DAccumulator{Float64}  # Regional ramp feasibility violations
     previous_regional_dispatch::Vector{Float64}  # Track previous regional dispatch
+    generators_cache::Vector{PSY.Generator}  # Cache of generator objects to avoid repeated lookups
+    ramp_limits_cache::Vector{Union{Nothing, NamedTuple{(:up, :down), Tuple{Float64, Float64}}}}  # Cache of ramp limits (Nothing for non-rampable generators)
 end
 
 function PRASCore.Results.accumulator(
@@ -351,6 +360,27 @@ function PRASCore.Results.accumulator(
     nsamples::Int,
     ramp_violator::RampViolations,
 ) where {N}
+    # Build generator cache once during initialization to avoid repeated get_component calls
+    generators_cache = [
+        PSY.get_component(PSY.Generator, ramp_violator.sys, name) for
+        name in sys.generators.names
+    ]
+
+    # Build ramp limits cache - store ramp limits for generators that have them
+    ramp_limits_cache = Vector{Union{Nothing, NamedTuple{(:up, :down), Tuple{Float64, Float64}}}}(undef, length(sys.generators.names))
+    for (i, gen) in enumerate(generators_cache)
+        if isa(gen, Union{PSY.ThermalGen, PSY.HydroDispatch})
+            limits = PSY.get_ramp_limits(gen)
+            # Validate ramp limits during initialization
+            if isnan(limits.up) || isnan(limits.down)
+                error("Generator $(sys.generators.names[i]) has NaN ramp limits (up=$(limits.up), down=$(limits.down)).")
+            end
+            ramp_limits_cache[i] = (up=limits.up, down=limits.down)
+        else
+            ramp_limits_cache[i] = nothing  # Non-rampable or special handling needed
+        end
+    end
+
     return RampViolationsAccumulator(
         ramp_violator.sys,
         ramp_violator.disaggregation_func,
@@ -363,6 +393,8 @@ function PRASCore.Results.accumulator(
         zeros(Bool, length(sys.generators.names)),  # previous_availability
         Sparse3DAccumulator{Float64}(),  # regional_ramp_infeasibility
         zeros(Float64, length(sys.regions)),  # previous_regional_dispatch
+        generators_cache,  # generators_cache
+        ramp_limits_cache,  # ramp_limits_cache
     )
 end
 
@@ -409,7 +441,7 @@ end
 # ThermalStandard
 
 """
-    get_regional_ramp_bounds(sys, system, state, region_idx, t)
+    get_regional_ramp_bounds(generators_cache, ramp_limits_cache, system, state, region_idx, t)
 
 Calculate the maximum ramp capability (up and down) for a region.
 
@@ -417,7 +449,8 @@ Returns a named tuple (up=MW/min, down=MW/min) representing the sum of all
 available generator ramp limits in the region at timestep t.
 """
 function get_regional_ramp_bounds(
-    sys::PSY.System,
+    generators_cache::Vector{PSY.Generator},
+    ramp_limits_cache::Vector{Union{Nothing, NamedTuple{(:up, :down), Tuple{Float64, Float64}}}},
     system::PRASCore.SystemModel,
     state::PRASCore.Simulations.SystemState,
     region_idx::Int,
@@ -433,24 +466,18 @@ function get_regional_ramp_bounds(
             continue
         end
 
-        gen_name = system.generators.names[gen_idx]
-        generator = PSY.get_component(PSY.Generator, sys, gen_name)
+        generator = generators_cache[gen_idx]
 
         # Skip non-dispatchable renewables
         if isa(generator, PSY.RenewableNonDispatch)
             continue
         end
 
-        if isa(generator, Union{PSY.ThermalGen, PSY.HydroDispatch})
-            ramp_limits = PSY.get_ramp_limits(generator)
-            # Check for NaN ramp limits and fail fast with clear error
-            if isnan(ramp_limits.up) || isnan(ramp_limits.down)
-                error(
-                    "Generator $(gen_name) has NaN ramp limits (up=$(ramp_limits.up), down=$(ramp_limits.down)).",
-                )
-            end
-            total_ramp_up += ramp_limits.up
-            total_ramp_down += ramp_limits.down
+        # Use cached ramp limits
+        cached_limits = ramp_limits_cache[gen_idx]
+        if !isnothing(cached_limits)
+            total_ramp_up += cached_limits.up
+            total_ramp_down += cached_limits.down
         elseif isa(generator, PSY.RenewableDispatch)
             # Renewable dispatch is very flexible
             capacity = system.generators.capacity[gen_idx, t]
@@ -473,6 +500,7 @@ Returns a named tuple with:
 """
 function get_generator_ramp_limits(
     generator::PSY.Generator,
+    cached_limits::Union{Nothing, NamedTuple{(:up, :down), Tuple{Float64, Float64}}},
     system::PRASCore.SystemModel,
     gen_idx::Int,
     previous_availability::Bool,
@@ -498,13 +526,11 @@ function get_generator_ramp_limits(
         return (up=0.0, down=0.0, can_ramp=false, capacity_change=0.0)
     end
 
-    # Generator staying online - check if it has ramp limits
-    if isa(generator, Union{PSY.HydroDispatch, PSY.ThermalGen})
-        # Use PSY.get_ramp_limits() to get values in system units (NATURAL_UNITS = MW/min)
-        ramp_limits = PSY.get_ramp_limits(generator)
+    # Generator staying online - use cached ramp limits if available
+    if !isnothing(cached_limits)
         return (
-            up=ramp_limits.up,
-            down=ramp_limits.down,
+            up=cached_limits.up,
+            down=cached_limits.down,
             can_ramp=true,
             capacity_change=0.0,
         )
@@ -543,7 +569,7 @@ function PRASCore.Simulations.record!(
     try
         # Get regional dispatch
         region_generation = get_generator_region_dispatch(system, state, problem, t)
-        fixed_region_generation = get_generator_fixed_dispatch(system, acc.sys, state, t)
+        fixed_region_generation = get_generator_fixed_dispatch(system, acc.generators_cache, state, t)
         region_generation .-= fixed_region_generation
 
         # Check regional ramp feasibility BEFORE disaggregation
@@ -559,7 +585,7 @@ function PRASCore.Simulations.record!(
 
                 # Calculate available regional ramp capability
                 ramp_bounds =
-                    get_regional_ramp_bounds(acc.sys, system, state, region_idx, t)
+                    get_regional_ramp_bounds(acc.generators_cache, acc.ramp_limits_cache, system, state, region_idx, t)
 
                 # Check if regional ramp is feasible
                 infeasibility = 0.0
@@ -590,6 +616,8 @@ function PRASCore.Simulations.record!(
                 system,
                 state,
                 t,
+                acc.generators_cache,
+                acc.ramp_limits_cache,
             )
 
             # Store in global generator array
@@ -609,8 +637,7 @@ function PRASCore.Simulations.record!(
         # Calculate per-generator ramp violations
         total_violation = 0.0
         for gen_idx in 1:length(system.generators.names)
-            generator =
-                PSY.get_component(PSY.Generator, acc.sys, system.generators.names[gen_idx])
+            generator = acc.generators_cache[gen_idx]
 
             # Skip non-dispatchable renewables - they're already accounted for as fixed generation
             if isa(generator, PSY.RenewableNonDispatch)
@@ -620,6 +647,7 @@ function PRASCore.Simulations.record!(
             # Get generator ramp limits
             limits = get_generator_ramp_limits(
                 generator,
+                acc.ramp_limits_cache[gen_idx],
                 system,
                 gen_idx,
                 acc.previous_availability[gen_idx],
@@ -717,7 +745,7 @@ end
 
 function get_generator_fixed_dispatch(
     system::PRASCore.SystemModel,
-    sys::PSY.System,
+    generators_cache::Vector{PSY.Generator},
     state::PRASCore.Simulations.SystemState,
     t::Int,
 )
@@ -728,8 +756,7 @@ function get_generator_fixed_dispatch(
             if !state.gens_available[gen_idx]
                 continue
             end
-            name = system.generators.names[gen_idx]
-            if isa(PSY.get_component(PSY.Generator, sys, name), PSY.RenewableNonDispatch)
+            if isa(generators_cache[gen_idx], PSY.RenewableNonDispatch)
                 dispatch[region_idx] += system.generators.capacity[gen_idx, t]
             end
         end

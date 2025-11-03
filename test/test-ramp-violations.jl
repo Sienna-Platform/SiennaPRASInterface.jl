@@ -330,40 +330,18 @@ end
         end
 
         @testset "assess with RampViolations (merit order)" begin
-            merit_order_wrapper =
-                (region_dispatch, gen_idxs, system, state, t) ->
-                    SiennaPRASInterface.merit_order_disaggregation(
-                        region_dispatch,
-                        gen_idxs,
-                        system,
-                        state,
-                        t,
-                        rts_sys,
-                    )
-
             test_disaggregation_method(
                 rts_sys,
-                merit_order_wrapper,
+                SiennaPRASInterface.merit_order_disaggregation,
                 "Ramp Violation Summary (Original RTS-GMLC - Merit Order)",
                 false,
             )
         end
 
         @testset "assess with RampViolations (ramp-aware)" begin
-            ramp_aware_wrapper =
-                (region_dispatch, gen_idxs, system, state, t) ->
-                    SiennaPRASInterface.ramp_aware_disaggregation(
-                        region_dispatch,
-                        gen_idxs,
-                        system,
-                        state,
-                        t,
-                        rts_sys,
-                    )
-
             test_disaggregation_method(
                 rts_sys,
-                ramp_aware_wrapper,
+                SiennaPRASInterface.ramp_aware_disaggregation,
                 "Ramp Violation Summary (Original RTS-GMLC - Ramp-Aware)",
                 false,
             )
@@ -383,40 +361,18 @@ end
         end
 
         @testset "assess with RampViolations (merit order)" begin
-            merit_order_wrapper =
-                (region_dispatch, gen_idxs, system, state, t) ->
-                    SiennaPRASInterface.merit_order_disaggregation(
-                        region_dispatch,
-                        gen_idxs,
-                        system,
-                        state,
-                        t,
-                        rts_sys,
-                    )
-
             test_disaggregation_method(
                 rts_sys,
-                merit_order_wrapper,
+                SiennaPRASInterface.merit_order_disaggregation,
                 "Ramp Violation Summary (Modified RTS-GMLC with Tight Limits - Merit Order)",
                 true,
             )
         end
 
         @testset "assess with RampViolations (ramp-aware)" begin
-            ramp_aware_wrapper =
-                (region_dispatch, gen_idxs, system, state, t) ->
-                    SiennaPRASInterface.ramp_aware_disaggregation(
-                        region_dispatch,
-                        gen_idxs,
-                        system,
-                        state,
-                        t,
-                        rts_sys,
-                    )
-
             test_disaggregation_method(
                 rts_sys,
-                ramp_aware_wrapper,
+                SiennaPRASInterface.ramp_aware_disaggregation,
                 "Ramp Violation Summary (Modified RTS-GMLC with Tight Limits - Ramp-Aware)",
                 true,
             )

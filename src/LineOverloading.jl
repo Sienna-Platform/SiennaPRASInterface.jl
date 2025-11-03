@@ -68,6 +68,8 @@ mutable struct PowerFlowWithOverloadsAccumulator <:
     flow_mw::Vector{Float64}
     rating_mw::Vector{Float64}
     pf_converged::Vector{Bool}
+    generators_cache::Vector{PSY.Generator}  # Cache of generator objects
+    ramp_limits_cache::Vector{Union{Nothing, NamedTuple{(:up, :down), Tuple{Float64, Float64}}}}  # Cache of ramp limits
 end
 
 """
@@ -79,7 +81,7 @@ Each thread will get its own accumulator (and thus its own PowerFlowData).
 The PowerFlowData is stored in all_pf_data to keep it alive.
 """
 function PRASCore.Results.accumulator(
-    system::PRASCore.SystemModel,
+    pras_system::PRASCore.SystemModel,
     nsamples::Int,
     spec::PowerFlowWithOverloads,
 )
@@ -88,6 +90,23 @@ function PRASCore.Results.accumulator(
 
     # Extract branch names in order from branch_lookup
     branch_names = sort(collect(keys(pf_data.branch_lookup)), by=k -> pf_data.branch_lookup[k])
+
+    # Build generator cache once during initialization
+    generators_cache = [
+        PSY.get_component(PSY.Generator, spec.sys, name) for
+        name in pras_system.generators.names
+    ]
+
+    # Build ramp limits cache
+    ramp_limits_cache = Vector{Union{Nothing, NamedTuple{(:up, :down), Tuple{Float64, Float64}}}}(undef, length(pras_system.generators.names))
+    for (i, gen) in enumerate(generators_cache)
+        if isa(gen, Union{PSY.ThermalGen, PSY.HydroDispatch})
+            limits = PSY.get_ramp_limits(gen)
+            ramp_limits_cache[i] = (up=limits.up, down=limits.down)
+        else
+            ramp_limits_cache[i] = nothing
+        end
+    end
 
     return PowerFlowWithOverloadsAccumulator(
         spec.sys,
@@ -102,6 +121,8 @@ function PRASCore.Results.accumulator(
         Float64[],
         Float64[],
         Bool[],
+        generators_cache,
+        ramp_limits_cache,
     )
 end
 
@@ -258,6 +279,8 @@ function PRASCore.Simulations.record!(
         acc.sys,
         t,
         state,
+        acc.generators_cache,
+        acc.ramp_limits_cache,
     )
 
     # Solve power flow

@@ -57,9 +57,6 @@ println()
 println("Loading RTS-GMLC Day-Ahead system...")
 sys = get_rts_gmlc_outage("DA")
 println("System loaded successfully!")
-println("  Generators: $(length(PSY.get_components(PSY.Generator, sys)))")
-println("  Areas: $(length(PSY.get_components(PSY.Area, sys)))")
-println("  Loads: $(length(PSY.get_components(PSY.StaticLoad, sys)))")
 println()
 
 #######################
@@ -71,25 +68,12 @@ println("Setting up Monte Carlo simulation...")
 # Create Monte Carlo method with threading
 method = SequentialMonteCarlo(; samples=NUM_SAMPLES, seed=RANDOM_SEED)
 
-# Create merit order disaggregation wrapper for RampViolations
-merit_order_wrapper =
-    (region_dispatch, gen_idxs, system, state, t) ->
-        SiennaPRASInterface.merit_order_disaggregation(
-            region_dispatch,
-            gen_idxs,
-            system,
-            state,
-            t,
-            sys,
-        )
-
 # Create result specifications with merit order disaggregation
-ramp_spec = RampViolations(sys; disaggregation_func=merit_order_wrapper)
+ramp_spec = RampViolations(sys)
 
 println("Simulation configured:")
 println("  Method: Sequential Monte Carlo")
 println("  Aggregation: By Area")
-println("  Disaggregation: Merit Order (cost-based dispatch)")
 println()
 
 #######################
@@ -97,7 +81,6 @@ println()
 #######################
 
 println("Running resource adequacy assessment...")
-println("This may take several minutes with $NUM_SAMPLES samples...")
 println()
 
 start_time = time()
@@ -282,6 +265,57 @@ p4 = scatter(
 correlation_file = joinpath(OUTPUT_DIR, "lostload_vs_ramp_violations.png")
 savefig(p4, correlation_file)
 println("  Saved: $correlation_file")
+
+# Plot 5: Distribution of violations per sample
+println("Creating histogram of violations per sample...")
+
+# Filter out samples with zero violations for summary stats on samples with violations
+samples_with_viols = sample_ramp_count[sample_ramp_count .> 0]
+
+p5 = histogram(
+    sample_ramp_count,
+    bins=50,
+    xlabel="Number of Ramp Violations per Sample",
+    ylabel="Number of Samples",
+    title="Distribution of Ramp Violations per Sample\n(RTS-GMLC, $NUM_SAMPLES samples)",
+    legend=false,
+    color=:teal,
+    alpha=0.7,
+)
+
+# Add vertical line for median (of all samples)
+median_violations = median(sample_ramp_count)
+vline!(
+    p5,
+    [median_violations],
+    linewidth=2,
+    linestyle=:dash,
+    color=:red,
+    label="Median = $(round(median_violations, digits=1))",
+)
+
+# Add annotation with summary stats
+if length(samples_with_viols) > 0
+    mean_viols = mean(sample_ramp_count)
+    median_all = median(sample_ramp_count)
+    max_viols = maximum(sample_ramp_count)
+    pct_with_viols = 100 * length(samples_with_viols) / NUM_SAMPLES
+
+    annotate!(
+        p5,
+        maximum(sample_ramp_count) * 0.6,
+        maximum(ylims(p5)) * 0.85,
+        text(
+            "Mean: $(round(mean_viols, digits=1))\nMedian: $(round(median_all, digits=1))\nMax: $max_viols\n$(round(pct_with_viols, digits=1))% with violations",
+            10,
+            :left,
+        ),
+    )
+end
+
+sample_dist_file = joinpath(OUTPUT_DIR, "ramp_violations_per_sample.png")
+savefig(p5, sample_dist_file)
+println("  Saved: $sample_dist_file")
 
 println()
 println("="^80)

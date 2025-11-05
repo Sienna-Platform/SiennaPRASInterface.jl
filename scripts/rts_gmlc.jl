@@ -4,7 +4,7 @@ as a Supplemental Attribute
 """
 function get_rts_gmlc_outage(sys_type::String)
     # Temporarily using regular RTS-GMLC to debug
-    sys_name = "modified_RTS_GMLC_$(sys_type)_sys"
+    sys_name = "RTS_GMLC_$(sys_type)_sys"
     # sys_name = "modified_RTS_GMLC_$(sys_type)_sys"
     rts_sys = PSCB.build_system(PSCB.PSISystems, sys_name)
 

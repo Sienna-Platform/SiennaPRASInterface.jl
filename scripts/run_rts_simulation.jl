@@ -56,6 +56,12 @@ println()
 
 println("Loading RTS-GMLC Day-Ahead system...")
 sys = get_rts_gmlc_outage("DA")
+loads = PSY.get_components(PSY.StaticLoad, sys)
+for load in loads
+    current_base_power = PSY.get_base_power(load)
+    new_base_power = current_base_power * 1.10
+    PSY.set_base_power!(load, new_base_power)
+end
 println("System loaded successfully!")
 println()
 
@@ -68,7 +74,7 @@ println("Setting up Monte Carlo simulation...")
 # Create Monte Carlo method with threading
 method = SequentialMonteCarlo(; samples=NUM_SAMPLES, seed=RANDOM_SEED)
 
-# Create result specifications with merit order disaggregation
+# Create result specifications
 ramp_spec = RampViolations(sys)
 
 println("Simulation configured:")
@@ -179,34 +185,85 @@ if n_violations > 0
     savefig(p1, histogram_file)
     println("  Saved: $histogram_file")
 
-    # Plot 2: Violations over time
-    println("Creating time series plot of violations...")
-    timesteps = ramp_violations.ramp_violation.time
+    # Plot 2a: Heatmap of violation counts (samples × timesteps)
+    println("Creating heatmap of violation counts...")
 
-    # Count violations per timestep
-    timestep_counts = Dict{Int, Int}()
-    for t in timesteps
-        timestep_counts[t] = get(timestep_counts, t, 0) + 1
+    # Extract data from sparse accumulator
+    sample_ids = ramp_violations.ramp_violation.sampleid
+    timesteps = ramp_violations.ramp_violation.time
+    violations_values = ramp_violations.ramp_violation.value
+
+    # Determine dimensions
+    num_timesteps = maximum(timesteps)
+    num_samples = NUM_SAMPLES
+
+    # Build violation count matrix (samples × timesteps)
+    # Count number of violations at each (sample, timestep) combination
+    violation_count_matrix = zeros(Int, num_samples, num_timesteps)
+    for i in 1:length(sample_ids)
+        s = sample_ids[i]
+        t = timesteps[i]
+        violation_count_matrix[s, t] += 1
     end
 
-    sorted_timesteps = sort(collect(keys(timestep_counts)))
-    counts = [timestep_counts[t] for t in sorted_timesteps]
-
-    p2 = scatter(
-        sorted_timesteps,
-        counts,
+    # Create heatmap with log scale for color to handle zeros
+    # Use log10(x + 1) so zeros map to 0 in log space
+    heatmap_data = log10.(violation_count_matrix .+ 1)
+    p2a = heatmap(
+        1:num_timesteps,
+        1:num_samples,
+        heatmap_data,
         xlabel="Time Step",
-        ylabel="Number of Violations",
-        title="Ramp Violations Over Time\n(RTS-GMLC, $NUM_SAMPLES samples)",
-        legend=false,
-        color=:coral,
-        alpha=0.6,
-        markersize=4,
+        ylabel="Sample ID",
+        title="Ramp Violations Count Heatmap\n(RTS-GMLC, $NUM_SAMPLES samples)",
+        colorbar_title="log10(Count+1)",
+        color=:viridis,
+        aspect_ratio=:auto,
+        size=(1000, 600),
+        left_margin=10Plots.mm,
+        right_margin=10Plots.mm,
+        top_margin=10Plots.mm,
+        bottom_margin=10Plots.mm,
     )
 
-    timeseries_file = joinpath(OUTPUT_DIR, "ramp_violations_timeseries.png")
-    savefig(p2, timeseries_file)
-    println("  Saved: $timeseries_file")
+    count_heatmap_file = joinpath(OUTPUT_DIR, "ramp_violations_count_heatmap.png")
+    savefig(p2a, count_heatmap_file)
+    println("  Saved: $count_heatmap_file")
+
+    # Plot 2b: Heatmap of total violation magnitude (MW/min) per sample-timestep
+    println("Creating heatmap of violation magnitudes...")
+
+    # Build violation magnitude matrix (samples × timesteps)
+    # Sum of violation magnitudes at each (sample, timestep) combination
+    violation_magnitude_matrix = zeros(Float64, num_samples, num_timesteps)
+    for i in 1:length(sample_ids)
+        s = sample_ids[i]
+        t = timesteps[i]
+        violation_magnitude_matrix[s, t] += abs(violations_values[i])
+    end
+
+    # Create heatmap with log scale
+    magnitude_heatmap_data = log10.(violation_magnitude_matrix .+ 0.01)  # +0.01 to handle zeros
+    p2b = heatmap(
+        1:num_timesteps,
+        1:num_samples,
+        magnitude_heatmap_data,
+        xlabel="Time Step",
+        ylabel="Sample ID",
+        title="Ramp Violations Magnitude Heatmap\n(RTS-GMLC, $NUM_SAMPLES samples)",
+        colorbar_title="log10(MW/min)",
+        color=:plasma,
+        aspect_ratio=:auto,
+        size=(1000, 600),
+        left_margin=10Plots.mm,
+        right_margin=10Plots.mm,
+        top_margin=10Plots.mm,
+        bottom_margin=10Plots.mm,
+    )
+
+    magnitude_heatmap_file = joinpath(OUTPUT_DIR, "ramp_violations_magnitude_heatmap.png")
+    savefig(p2b, magnitude_heatmap_file)
+    println("  Saved: $magnitude_heatmap_file")
 
     # Plot 3: Top 10 generators by violation count
     println("Creating bar plot of top generators...")
@@ -265,6 +322,243 @@ p4 = scatter(
 correlation_file = joinpath(OUTPUT_DIR, "lostload_vs_ramp_violations.png")
 savefig(p4, correlation_file)
 println("  Saved: $correlation_file")
+
+# Plot 4b: Per-sample Lost Load vs Total Ramp Violation Magnitude
+println("Creating magnitude correlation plot...")
+
+# Compute per-sample total violation magnitude (MW/min)
+sample_ramp_magnitude = zeros(Float64, NUM_SAMPLES)
+if n_violations > 0
+    for i in 1:n_violations
+        sample_id = ramp_violations.ramp_violation.sampleid[i]
+        sample_ramp_magnitude[sample_id] += abs(violations[i])
+    end
+end
+
+p4b = scatter(
+    sample_ramp_magnitude,
+    sample_eue,
+    xlabel="Total Ramp Violation Magnitude per Sample (MW/min)",
+    ylabel="Unserved Energy per Sample (MWh)",
+    title="Lost Load vs Ramp Violation Magnitude\n(RTS-GMLC, $NUM_SAMPLES samples)",
+    legend=false,
+    color=:orange,
+    alpha=0.5,
+    markersize=4,
+)
+
+magnitude_correlation_file = joinpath(OUTPUT_DIR, "lostload_vs_ramp_magnitude.png")
+savefig(p4b, magnitude_correlation_file)
+println("  Saved: $magnitude_correlation_file")
+
+# Compute and print correlation statistics
+if n_violations > 0
+    println()
+    println("Correlation Analysis:")
+
+    # Correlation between violation count and EUE
+    nonzero_mask = (sample_ramp_count .> 0) .| (sample_eue .> 0)
+    if sum(nonzero_mask) > 1
+        count_eue_corr = cor(sample_ramp_count[nonzero_mask], sample_eue[nonzero_mask])
+        println(
+            "  Correlation (violation count vs EUE): $(round(count_eue_corr, digits=3))",
+        )
+    end
+
+    # Correlation between violation magnitude and EUE
+    if sum(sample_ramp_magnitude .> 0) > 1
+        mag_nonzero_mask = (sample_ramp_magnitude .> 0) .| (sample_eue .> 0)
+        mag_eue_corr =
+            cor(sample_ramp_magnitude[mag_nonzero_mask], sample_eue[mag_nonzero_mask])
+        println(
+            "  Correlation (violation magnitude vs EUE): $(round(mag_eue_corr, digits=3))",
+        )
+    end
+
+    # Samples with low violations but high EUE (potential outage effect)
+    low_violation_threshold = quantile(sample_ramp_magnitude, 0.25)
+    high_eue_threshold = quantile(sample_eue[sample_eue .> 0], 0.75)
+    low_viol_high_eue = sum(
+        (sample_ramp_magnitude .<= low_violation_threshold) .&
+        (sample_eue .>= high_eue_threshold),
+    )
+    println("  Samples with low violations but high EUE: $low_viol_high_eue")
+    println("    (This may indicate outages reducing violations)")
+
+    # Identify samples with notably fewer violations (the "dark streaks")
+    # Calculate total violations per sample across all timesteps
+    total_violations_per_sample = sum(violation_count_matrix, dims=2)[:, 1]
+    median_violations =
+        median(total_violations_per_sample[total_violations_per_sample .> 0])
+    low_violation_samples = findall(total_violations_per_sample .< median_violations)
+
+    println(
+        "  Median violations per sample (excluding zeros): $(round(median_violations, digits=1))",
+    )
+    println(
+        "  Samples below median (potential 'dark streaks'): $(length(low_violation_samples)) of $NUM_SAMPLES",
+    )
+
+    # Check if low-violation samples have different EUE patterns
+    if length(low_violation_samples) > 0
+        avg_eue_low_viol = mean(sample_eue[low_violation_samples])
+        avg_eue_all = mean(sample_eue)
+        println(
+            "  Average EUE for low-violation samples: $(round(avg_eue_low_viol, digits=2)) MWh",
+        )
+        println("  Average EUE for all samples: $(round(avg_eue_all, digits=2)) MWh")
+        if avg_eue_low_viol > avg_eue_all * 1.2
+            println(
+                "  → Low-violation samples have 20%+ higher EUE (outages likely reducing violations)",
+            )
+        elseif avg_eue_low_viol < avg_eue_all * 0.8
+            println(
+                "  → Low-violation samples have 20%+ lower EUE (favorable load patterns likely)",
+            )
+        else
+            println("  → Similar EUE between low and normal violation samples")
+        end
+    end
+    println()
+
+    # NEW ANALYSIS: Per-timestep outage vs violation correlation
+    println("="^60)
+    println("TIMESTEP-LEVEL OUTAGE ANALYSIS")
+    println("="^60)
+
+    # Count outages per timestep across all samples
+    outages_per_timestep = zeros(Int, num_timesteps, NUM_SAMPLES)
+    if hasfield(typeof(ramp_violations), :generator_unavailability)
+        gen_unavail = ramp_violations.generator_unavailability
+        for i in 1:length(gen_unavail.sampleid)
+            s = gen_unavail.sampleid[i]
+            t = gen_unavail.time[i]
+            outages_per_timestep[t, s] += 1
+        end
+    end
+
+    # Count violations per timestep (already have violation_count_matrix)
+    # Compare timesteps with outages vs without
+
+    # For each timestep across all samples, categorize by outage count
+    timestep_outage_counts = vec(outages_per_timestep)
+    timestep_violation_counts = vec(violation_count_matrix')  # Transpose to match ordering
+
+    # Separate into categories
+    no_outage_mask = timestep_outage_counts .== 0
+    has_outage_mask = timestep_outage_counts .> 0
+    heavy_outage_mask = timestep_outage_counts .>= 3  # 3+ generators out
+
+    if sum(has_outage_mask) > 0
+        avg_viol_no_outage = mean(timestep_violation_counts[no_outage_mask])
+        avg_viol_with_outage = mean(timestep_violation_counts[has_outage_mask])
+
+        println("Timestep-level statistics:")
+        println(
+            "  Average violations when NO outages: $(round(avg_viol_no_outage, digits=2))",
+        )
+        println(
+            "  Average violations when outages occur: $(round(avg_viol_with_outage, digits=2))",
+        )
+        println(
+            "  Difference: $(round(avg_viol_no_outage - avg_viol_with_outage, digits=2)) violations",
+        )
+
+        pct_change = 100 * (avg_viol_with_outage - avg_viol_no_outage) / avg_viol_no_outage
+        println("  Percent change: $(round(pct_change, digits=1))%")
+
+        if pct_change < -5
+            println("  → Outages REDUCE violations by >5% (confirms hypothesis!)")
+        elseif pct_change > 5
+            println("  → Outages INCREASE violations by >5%")
+        else
+            println("  → Outages have minimal effect on violations")
+        end
+
+        if sum(heavy_outage_mask) > 10
+            avg_viol_heavy = mean(timestep_violation_counts[heavy_outage_mask])
+            println(
+                "  Average violations when 3+ outages: $(round(avg_viol_heavy, digits=2))",
+            )
+        end
+
+        # Correlation between outage count and violation count at timestep level
+        if sum(has_outage_mask) > 10
+            outage_viol_corr = cor(timestep_outage_counts, timestep_violation_counts)
+            println(
+                "  Correlation (outages vs violations at timestep level): $(round(outage_viol_corr, digits=3))",
+            )
+        end
+
+        # Check violation MAGNITUDE also decreases (not just count)
+        timestep_violation_magnitude = vec(violation_magnitude_matrix')
+        avg_mag_no_outage = mean(timestep_violation_magnitude[no_outage_mask])
+        avg_mag_with_outage = mean(timestep_violation_magnitude[has_outage_mask])
+
+        println("\nViolation magnitude analysis:")
+        println(
+            "  Average magnitude when NO outages: $(round(avg_mag_no_outage, digits=2)) MW/min",
+        )
+        println(
+            "  Average magnitude when outages occur: $(round(avg_mag_with_outage, digits=2)) MW/min",
+        )
+        mag_pct_change = 100 * (avg_mag_with_outage - avg_mag_no_outage) / avg_mag_no_outage
+        println("  Percent change: $(round(mag_pct_change, digits=1))%")
+
+        # Check if outages correlate with unserved energy
+        println("\nChecking if outages → unserved energy:")
+
+        # Get shortfall per timestep
+        # shortfall.shortfall is Array{Int,3} with dimensions (regions × timesteps × samples)
+        shortfall_data = shortfall.shortfall
+
+        # Sum across all regions (first dimension) to get total system shortfall
+        # Result: (timesteps × samples)
+        system_shortfall = dropdims(sum(shortfall_data, dims=1), dims=1)
+
+        # Flatten to match violation data ordering: vec by transposing first
+        timestep_shortfall = vec(system_shortfall')  # Now (samples*timesteps,)
+
+        avg_shortfall_no_outage = mean(timestep_shortfall[no_outage_mask])
+        avg_shortfall_with_outage = mean(timestep_shortfall[has_outage_mask])
+
+        println(
+            "  Average shortfall when NO outages: $(round(avg_shortfall_no_outage, digits=2)) MW",
+        )
+        println(
+            "  Average shortfall when outages occur: $(round(avg_shortfall_with_outage, digits=2)) MW",
+        )
+
+        if avg_shortfall_with_outage > avg_shortfall_no_outage * 1.5
+            println("  → Outages cause 50%+ more unserved energy")
+            println(
+                "  → Hypothesis: Reduced dispatch → less ramping needed → fewer violations",
+            )
+        else
+            println("  → Unserved energy doesn't explain the violation reduction")
+        end
+
+        # Correlation between outages and shortfall
+        if sum(timestep_shortfall .> 0) > 10
+            outage_shortfall_corr = cor(timestep_outage_counts, timestep_shortfall)
+            println(
+                "  Correlation (outages vs shortfall): $(round(outage_shortfall_corr, digits=3))",
+            )
+        end
+
+        # Additional insight: Check if the issue is that inflexible generators are the ones going out
+        println("\nHypothesis check:")
+        println("  If outages preferentially remove inflexible generators,")
+        println("  then remaining generators are more flexible on average,")
+        println("  leading to fewer violations even with similar dispatch levels.")
+        println()
+        println("  Key insight: PRAS regional dispatch accounts for outages")
+        println("  by reducing available capacity. The disaggregation then")
+        println("  distributes dispatch among remaining (potentially more flexible)")
+        println("  generators, and the offline generator can't violate constraints.")
+    end
+    println()
+end
 
 # Plot 5: Distribution of violations per sample
 println("Creating histogram of violations per sample...")

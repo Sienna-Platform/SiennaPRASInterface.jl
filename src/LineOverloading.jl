@@ -85,8 +85,9 @@ function PRASCore.Results.accumulator(
     nsamples::Int,
     spec::PowerFlowWithOverloads,
 )
-    # Create PowerFlowData for this thread
-    pf_data = PFS.PowerFlowData(spec.power_flow_evaluator, spec.sys; time_steps=1)
+    # Create PowerFlowData for this thread with ALL timesteps for batching
+    num_timesteps = length(pras_system.timestamps)
+    pf_data = PFS.PowerFlowData(spec.power_flow_evaluator, spec.sys; time_steps=num_timesteps)
 
     # Extract branch names in order from branch_lookup
     branch_names = sort(collect(keys(pf_data.branch_lookup)), by=k -> pf_data.branch_lookup[k])
@@ -257,10 +258,10 @@ end
 
 Record power flow results and line overloads for current timestep.
 
-This function:
-1. Writes PRAS dispatch to PowerFlowData
-2. Solves power flow
-3. Records any line overloads
+BATCHED IMPLEMENTATION:
+1. Writes PRAS dispatch to PowerFlowData column t
+2. On the LAST timestep, solves power flow for ALL timesteps at once
+3. Records any line overloads from all timesteps
 """
 function PRASCore.Simulations.record!(
     acc::PowerFlowWithOverloadsAccumulator,
@@ -270,9 +271,10 @@ function PRASCore.Simulations.record!(
     sampleid::Int,
     t::Int,
 )
-    # Write PRAS dispatch solution to PowerFlowData
-    # This function is defined in PowerFlowEvaluator.jl
-    write_output_to_pf_data!(
+    num_timesteps = length(system.timestamps)
+
+    # Write PRAS dispatch solution to PowerFlowData column t
+    write_output_to_pf_data_column!(
         acc.pf_data,
         problem,
         system,
@@ -283,22 +285,98 @@ function PRASCore.Simulations.record!(
         acc.ramp_limits_cache,
     )
 
-    # Solve power flow
-    pf_converged = false
-    try
-        PFS.solve_powerflow!(acc.pf_data; pf=acc.power_flow_evaluator)
-        pf_converged = true
-    catch e
-        # Power flow failed - this is expected sometimes
+    # On the last timestep, solve power flow for ALL timesteps at once
+    if t == num_timesteps
+        # Solve power flow for all timesteps in one batch
         pf_converged = false
+        try
+            PFS.solve_powerflow!(acc.pf_data)
+            pf_converged = true
+        catch e
+            # Power flow failed - print error for debugging
+            @warn "Power flow failed for sample $sampleid" exception=(e, catch_backtrace())
+            pf_converged = false
+        end
+
+        # Record convergence for all timesteps
+        for _ in 1:num_timesteps
+            push!(acc.pf_converged, pf_converged)
+        end
+
+        # Record overloads from all timesteps if converged
+        if pf_converged
+            record_line_overloads_batched!(acc, sampleid, system)
+        end
     end
 
-    # Record convergence
-    push!(acc.pf_converged, pf_converged)
+    return nothing
+end
 
-    # Record overloads if converged
-    if pf_converged
-        record_line_overloads!(acc, sampleid, t)
+"""
+    record_line_overloads_batched!(
+        acc::PowerFlowWithOverloadsAccumulator,
+        sample_id::Int,
+        system::PRASCore.SystemModel,
+    )
+
+Record line overloads from ALL timesteps in the PowerFlowData (batched version).
+"""
+function record_line_overloads_batched!(
+    acc::PowerFlowWithOverloadsAccumulator,
+    sample_id::Int,
+    system::PRASCore.SystemModel,
+)
+    pf_data = acc.pf_data
+    num_timesteps = length(system.timestamps)
+
+    # Check if this is AC power flow (has reactive power data)
+    has_reactive = !all(iszero, pf_data.branch_reactivepower_flow_from_to)
+
+    # Check each branch for overloads across ALL timesteps
+    for (branch_name, branch_idx) in pf_data.branch_lookup
+        # Get the branch from PowerSystems
+        branch = PSY.get_component(PSY.ACBranch, acc.sys, branch_name)
+        if isnothing(branch)
+            continue
+        end
+
+        # Get rating (in system natural units = MW or MVA)
+        rating = PSY.get_rating(branch)
+
+        if rating <= 0.0
+            continue  # Skip branches with no rating
+        end
+
+        # Check all timesteps for this branch
+        for t in 1:num_timesteps
+            # Get flows for timestep t
+            p_from_to = pf_data.branch_activepower_flow_from_to[branch_idx, t]
+            p_to_from = pf_data.branch_activepower_flow_to_from[branch_idx, t]
+
+            # Calculate flow magnitude
+            if has_reactive
+                q_from_to = pf_data.branch_reactivepower_flow_from_to[branch_idx, t]
+                q_to_from = pf_data.branch_reactivepower_flow_to_from[branch_idx, t]
+                # AC power flow: use apparent power S = sqrt(P^2 + Q^2)
+                s_from_to = sqrt(p_from_to^2 + q_from_to^2)
+                s_to_from = sqrt(p_to_from^2 + q_to_from^2)
+                flow_magnitude = max(s_from_to, s_to_from)
+            else
+                # DC power flow: use active power only
+                flow_magnitude = max(abs(p_from_to), abs(p_to_from))
+            end
+
+            # Check for overload
+            overload = flow_magnitude - rating
+            if overload > 1e-6  # Small tolerance to avoid numerical noise
+                push!(acc.line_idx, branch_idx)
+                push!(acc.timestep, t)
+                push!(acc.sample_id, sample_id)
+                push!(acc.overload_mw, overload)
+                push!(acc.flow_mw, flow_magnitude)
+                push!(acc.rating_mw, rating)
+            end
+        end
     end
 
     return nothing
@@ -311,7 +389,7 @@ end
         timestep::Int,
     )
 
-Internal function to record line overloads from current PowerFlowData state.
+Internal function to record line overloads from current PowerFlowData state (single timestep, legacy version).
 """
 function record_line_overloads!(
     acc::PowerFlowWithOverloadsAccumulator,

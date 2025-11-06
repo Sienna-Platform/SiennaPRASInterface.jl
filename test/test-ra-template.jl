@@ -18,7 +18,7 @@ keys_to_names(
         PSY.get_name.(
             PSY.get_components(
                 PSY.get_available,
-                Union{PSY.HydroEnergyReservoir, PSY.HybridSystem},
+                Union{PSY.HydroTurbine, PSY.HybridSystem},
                 rts_da_sys,
             )
         )
@@ -44,10 +44,10 @@ keys_to_names(
             ),
             SiennaPRASInterface.DeviceRAModel(
                 PSY.EnergyReservoirStorage,
-                SiennaPRASInterface.EnergyReservoirLossless(),
+                SiennaPRASInterface.EnergyReservoirSoC(),
             ),
             SiennaPRASInterface.DeviceRAModel(
-                PSY.HydroEnergyReservoir,
+                PSY.HydroTurbine,
                 SiennaPRASInterface.HydroEnergyReservoirPRAS(),
             ),
         ],
@@ -123,7 +123,7 @@ end
             template,
             SiennaPRASInterface.DeviceRAModel(
                 PSY.EnergyReservoirStorage,
-                SiennaPRASInterface.EnergyReservoirLossless(),
+                SiennaPRASInterface.EnergyReservoirSoC(),
             ),
         )
         @test length(template.device_models) == 4

@@ -358,7 +358,7 @@ function process_generators(
 end
 
 function assign_to_stor_matrices!(
-    ::EnergyReservoirLossless,
+    ::EnergyReservoirSoC,
     s::PSY.Device,
     s2p_meta::S2P_metadata,
     charge_cap_array,
@@ -980,7 +980,7 @@ const DEFAULT_DEVICE_MODELS = [
     DeviceRAModel(PSY.RenewableGen, GeneratorPRAS),
     DeviceRAModel(PSY.HydroDispatch, GeneratorPRAS),
     DeviceRAModel(PSY.HydroTurbine, GeneratorPRAS),
-    DeviceRAModel(PSY.EnergyReservoirStorage, EnergyReservoirLossless),
+    DeviceRAModel(PSY.EnergyReservoirStorage, EnergyReservoirSoC),
     DeviceRAModel(PSY.HybridSystem, HybridSystemPRAS),
     DeviceRAModel(PSY.HydroPumpTurbine, HydroEnergyReservoirPRAS),
 ]
@@ -994,7 +994,7 @@ const _LUMPED_RENEWABLE_DEVICE_MODELS = [
     DeviceRAModel(PSY.RenewableGen, GeneratorPRAS, lump_renewable_generation=true),
     DeviceRAModel(PSY.HydroDispatch, GeneratorPRAS),
     DeviceRAModel(PSY.HydroTurbine, GeneratorPRAS),
-    DeviceRAModel(PSY.EnergyReservoirStorage, EnergyReservoirLossless),
+    DeviceRAModel(PSY.EnergyReservoirStorage, EnergyReservoirSoC),
     DeviceRAModel(PSY.HybridSystem, HybridSystemPRAS),
     DeviceRAModel(PSY.HydroPumpTurbine, HydroEnergyReservoirPRAS),
 ]

@@ -52,7 +52,7 @@ export HybridSystemPRAS
 export HydroEnergyReservoirPRAS
 export DeviceRAModel
 export GeneratorStoragePRAS
-export EnergyReservoirLossless
+export EnergyReservoirSoC
 export StoragePRAS
 export LinePRAS
 export AreaInterchangeLimit

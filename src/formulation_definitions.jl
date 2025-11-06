@@ -76,7 +76,6 @@ To add a generator storage formulation, you must also add a [`assign_to_gen_stor
   - [`HydroEnergyReservoirPRAS`](@ref)
 """
 abstract type GeneratorStoragePRAS <: AbstractRAFormulation end
-
 """
     HybridSystemPRAS(; max_active_power, add_default_transition_probabilities) <: GeneratorStoragePRAS
 
@@ -87,7 +86,8 @@ HybridSystemPRAS produces generatorstorage entries in PRAS.
 """
 struct HybridSystemPRAS <: GeneratorStoragePRAS
     "Name of time series to use for max active power"
-    max_active_power::String, "Whether to add default outage data"
+    max_active_power::String
+    "Whether to add default outage data"
     add_default_transition_probabilities::Bool
 
     function HybridSystemPRAS(;
@@ -110,7 +110,8 @@ struct HydroEnergyReservoirPRAS <: GeneratorStoragePRAS
     "Name of time series to use for inflow"
     inflow::String
     "Name of time series to use for storage capacity"
-    storage_capacity::String, "Whether to add default outage data"
+    storage_capacity::String
+    "Whether to add default outage data"
     add_default_transition_probabilities::Bool
 
     function HydroEnergyReservoirPRAS(;
@@ -170,7 +171,21 @@ abstract type StoragePRAS <: AbstractRAFormulation end
 
 EnergyReservoirSoC is a storage formulation that keeps track oh state of charge.
 """
-struct EnergyReservoirSoC <: StoragePRAS end
+struct EnergyReservoirSoC <: StoragePRAS
+    "Whether to add default outage data"
+    add_default_transition_probabilities::Bool
+
+    function EnergyReservoirSoC(; add_default_transition_probabilities=false)
+        return new(add_default_transition_probabilities)
+    end
+end
+
+"""
+Get whether default forced outages needed to be added to generatorstorages
+"""
+function get_add_default_transition_probabilities(f::StoragePRAS)
+    return f.add_default_transition_probabilities
+end
 
 """
     InterfacePRAS <: AbstractRAFormulation

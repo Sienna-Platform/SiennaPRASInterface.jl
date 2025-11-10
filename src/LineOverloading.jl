@@ -24,10 +24,20 @@ Result specification for running power flow during PRAS simulation and tracking 
 # Arguments
 - `sys::PSY.System`: PowerSystems system
 - `power_flow_evaluator::PFS.PowerFlowEvaluationModel`: Power flow method (DCPowerFlow, ACPowerFlow, etc.)
+- `disaggregation_func::DisaggregationFunction`: Function to disaggregate regional dispatch to generator-level dispatch (default: proportional_disaggregation)
 """
 struct PowerFlowWithOverloads <: PRASCore.Results.ResultSpec
     sys::PSY.System
     power_flow_evaluator::PFS.PowerFlowEvaluationModel
+    disaggregation_func::Function
+
+    function PowerFlowWithOverloads(
+        sys::PSY.System,
+        power_flow_evaluator::PFS.PowerFlowEvaluationModel;
+        disaggregation_func=proportional_disaggregation,
+    )
+        return new(sys, power_flow_evaluator, disaggregation_func)
+    end
 end
 
 """
@@ -43,6 +53,7 @@ user is done with the results. This prevents concurrent finalizer execution.
 # Fields
 - `sys::PSY.System`: PowerSystems system
 - `power_flow_evaluator::PFS.PowerFlowEvaluationModel`: Power flow method
+- `disaggregation_func::Function`: Function to disaggregate regional dispatch to generator-level dispatch
 - `pf_data::PFS.PowerFlowData`: PowerFlowData instance for this thread
 - `all_pf_data::Vector{PFS.PowerFlowData}`: Collection of PowerFlowData from all threads (built during merge)
 - `branch_names::Vector{String}`: Ordered branch names from PowerFlowData
@@ -58,6 +69,7 @@ mutable struct PowerFlowWithOverloadsAccumulator <:
                PRASCore.Results.ResultAccumulator{PowerFlowWithOverloads}
     sys::PSY.System
     power_flow_evaluator::PFS.PowerFlowEvaluationModel
+    disaggregation_func::Function
     pf_data::PFS.PowerFlowData  # This thread's PowerFlowData
     all_pf_data::Vector{PFS.PowerFlowData}  # Collect all PowerFlowData during merge
     branch_names::Vector{String}
@@ -112,6 +124,7 @@ function PRASCore.Results.accumulator(
     return PowerFlowWithOverloadsAccumulator(
         spec.sys,
         spec.power_flow_evaluator,
+        spec.disaggregation_func,
         pf_data,
         [pf_data],  # Start with this thread's PowerFlowData
         branch_names,
@@ -295,6 +308,7 @@ function PRASCore.Simulations.record!(
         state,
         acc.generators_cache,
         acc.ramp_limits_cache,
+        acc.disaggregation_func,
     )
 
     # On the last timestep, solve power flow for ALL timesteps at once

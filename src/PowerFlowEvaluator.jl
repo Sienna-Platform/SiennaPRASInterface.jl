@@ -10,6 +10,9 @@ This version writes to column t of the PowerFlowData matrices, allowing batched 
 - `psy_system::PSY.System`: PowerSystems system
 - `t::Int`: Current timestep (column index to write to)
 - `state::PRASCore.Simulations.SystemState`: Current system state
+- `generators_cache::Vector{PSY.Generator}`: Cache of generator objects
+- `ramp_limits_cache::Vector{Union{Nothing, NamedTuple}}`: Cache of ramp limits
+- `disaggregation_func::Function`: Function to disaggregate regional dispatch to generator-level dispatch
 """
 function write_output_to_pf_data_column!(
     pf_data::PFS.PowerFlowData,
@@ -20,6 +23,7 @@ function write_output_to_pf_data_column!(
     state::PRASCore.Simulations.SystemState,
     generators_cache::Vector{PSY.Generator},
     ramp_limits_cache::Vector{Union{Nothing, NamedTuple{(:up, :down), Tuple{Float64, Float64}}}},
+    disaggregation_func::Function,
 )
     # Clear column t
     pf_data.bus_activepower_injection[:, t] .= 0.0
@@ -36,11 +40,10 @@ function write_output_to_pf_data_column!(
     # Total generation includes both dispatchable and fixed
     total_region_generation = region_generation .+ fixed_region_generation
 
-    # Disaggregate to per-generator dispatch using proportional allocation
+    # Disaggregate to per-generator dispatch using the specified disaggregation function
     current_generation = zeros(Float64, length(pras_system.generators.names))
     for (region_idx, gen_idxs) in enumerate(pras_system.region_gen_idxs)
-        # Use proportional disaggregation to distribute dispatchable generation
-        gen_dispatch = proportional_disaggregation(
+        gen_dispatch = disaggregation_func(
             region_generation[region_idx],
             gen_idxs,
             pras_system,

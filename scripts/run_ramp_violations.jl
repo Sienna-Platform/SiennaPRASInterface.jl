@@ -338,6 +338,70 @@ if n_violations > 0
     savefig(p2b, magnitude_heatmap_file)
     report_println("  Saved: $magnitude_heatmap_file")
 
+    # Plot 2c & 2d: Heatmaps separated by outage status
+    report_println("Creating heatmaps separated by outage status...")
+
+    # Build outage mask matrix (samples × timesteps)
+    outage_mask = zeros(Bool, num_samples, num_timesteps)
+    gen_unavail = ramp_violations.generator_unavailability
+    for i in 1:length(gen_unavail.sampleid)
+        s = gen_unavail.sampleid[i]
+        t = gen_unavail.time[i]
+        outage_mask[s, t] = true
+    end
+
+    # With outages
+    magnitude_with_outages = copy(violation_magnitude_matrix)
+    magnitude_with_outages[.!outage_mask] .= NaN
+
+    if any(.!isnan.(magnitude_with_outages))
+        p2c = heatmap(
+            1:num_timesteps,
+            1:num_samples,
+            log10.(magnitude_with_outages .+ 0.01),
+            xlabel="Time Step",
+            ylabel="Sample ID",
+            title="Ramp Violations When Outages Occur\n(RTS-GMLC $system_variant, $disaggregation_method, $NUM_SAMPLES samples)",
+            colorbar_title="log10(MW/min)",
+            color=:plasma,
+            aspect_ratio=:auto,
+            size=(1000, 600),
+            left_margin=10Plots.mm,
+            right_margin=10Plots.mm,
+            top_margin=10Plots.mm,
+            bottom_margin=10Plots.mm,
+        )
+
+        savefig(p2c, joinpath(output_dir, "ramp_violations_magnitude_with_outages.png"))
+        report_println("  Saved: ramp_violations_magnitude_with_outages.png")
+    end
+
+    # Without outages
+    magnitude_no_outages = copy(violation_magnitude_matrix)
+    magnitude_no_outages[outage_mask] .= NaN
+
+    if any(.!isnan.(magnitude_no_outages))
+        p2d = heatmap(
+            1:num_timesteps,
+            1:num_samples,
+            log10.(magnitude_no_outages .+ 0.01),
+            xlabel="Time Step",
+            ylabel="Sample ID",
+            title="Ramp Violations When NO Outages Occur\n(RTS-GMLC $system_variant, $disaggregation_method, $NUM_SAMPLES samples)",
+            colorbar_title="log10(MW/min)",
+            color=:plasma,
+            aspect_ratio=:auto,
+            size=(1000, 600),
+            left_margin=10Plots.mm,
+            right_margin=10Plots.mm,
+            top_margin=10Plots.mm,
+            bottom_margin=10Plots.mm,
+        )
+
+        savefig(p2d, joinpath(output_dir, "ramp_violations_magnitude_no_outages.png"))
+        report_println("  Saved: ramp_violations_magnitude_no_outages.png")
+    end
+
     # Plot 3: Top 10 generators by violation count
     report_println("Creating bar plot of top generators...")
     sorted_gens = sort(collect(gen_counts), by=x -> x[2], rev=true)

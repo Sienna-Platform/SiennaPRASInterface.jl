@@ -1,12 +1,24 @@
 """
 Use PSCB to build RTS-GMLC System and add outage data
 as a Supplemental Attribute
+
+Arguments:
+- sys_type: String - System type, e.g. "DA" for Day-Ahead
+- modified: Bool - If true, use modified_RTS_GMLC; if false, use standard RTS_GMLC with 10% load increase
 """
-function get_rts_gmlc_outage(sys_type::String)
-    # Temporarily using regular RTS-GMLC to debug
-    sys_name = "RTS_GMLC_$(sys_type)_sys"
-    # sys_name = "modified_RTS_GMLC_$(sys_type)_sys"
+function get_rts_gmlc_outage(sys_type::String; modified::Bool=true)
+    sys_name = modified ? "modified_RTS_GMLC_$(sys_type)_sys" : "RTS_GMLC_$(sys_type)_sys"
     rts_sys = PSCB.build_system(PSCB.PSISystems, sys_name)
+
+    # For unmodified systems, increase load by 10% to stress the system
+    if !modified
+        loads = PSY.get_components(PSY.StaticLoad, rts_sys)
+        for load in loads
+            current_base_power = PSY.get_base_power(load)
+            new_base_power = current_base_power * 1.10
+            PSY.set_base_power!(load, new_base_power)
+        end
+    end
 
     ###########################################
     # Parse the gen.csv and add OutageData

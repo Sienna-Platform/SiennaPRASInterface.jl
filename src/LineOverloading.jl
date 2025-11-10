@@ -163,10 +163,22 @@ PRASCore.Results.accumulatortype(::PowerFlowWithOverloads) = PowerFlowWithOverlo
     PRASCore.Simulations.reset!(acc::PowerFlowWithOverloadsAccumulator, sample_id::Int)
 
 Reset accumulator state between samples. This is called by PRAS after each sample completes.
-Currently a no-op since we don't maintain state between samples.
+We need to clear the PowerFlowData arrays to avoid carrying data from one sample to the next.
 """
 function PRASCore.Simulations.reset!(acc::PowerFlowWithOverloadsAccumulator, sample_id::Int)
-    # No state to reset between samples
+    # Clear PowerFlowData arrays for the next sample
+    fill!(acc.pf_data.bus_activepower_injection, 0.0)
+    fill!(acc.pf_data.bus_reactivepower_injection, 0.0)
+    fill!(acc.pf_data.bus_activepower_withdrawals, 0.0)
+    fill!(acc.pf_data.bus_reactivepower_withdrawals, 0.0)
+    fill!(acc.pf_data.bus_magnitude, 0.0)
+    fill!(acc.pf_data.bus_angles, 0.0)
+    fill!(acc.pf_data.branch_activepower_flow_from_to, 0.0)
+    fill!(acc.pf_data.branch_reactivepower_flow_from_to, 0.0)
+    fill!(acc.pf_data.branch_activepower_flow_to_from, 0.0)
+    fill!(acc.pf_data.branch_reactivepower_flow_to_from, 0.0)
+    fill!(acc.pf_data.converged, false)
+
     return nothing
 end
 
@@ -376,75 +388,6 @@ function record_line_overloads_batched!(
                 push!(acc.flow_mw, flow_magnitude)
                 push!(acc.rating_mw, rating)
             end
-        end
-    end
-
-    return nothing
-end
-
-"""
-    record_line_overloads!(
-        acc::PowerFlowWithOverloadsAccumulator,
-        sample_id::Int,
-        timestep::Int,
-    )
-
-Internal function to record line overloads from current PowerFlowData state (single timestep, legacy version).
-"""
-function record_line_overloads!(
-    acc::PowerFlowWithOverloadsAccumulator,
-    sample_id::Int,
-    timestep::Int,
-)
-    pf_data = acc.pf_data
-
-    # Get flow matrices (we solve one timestep at a time, so always use column 1)
-    p_from_to = pf_data.branch_activepower_flow_from_to[:, 1]
-    p_to_from = pf_data.branch_activepower_flow_to_from[:, 1]
-
-    # Check if this is AC power flow (has reactive power data)
-    has_reactive = !all(iszero, pf_data.branch_reactivepower_flow_from_to)
-
-    if has_reactive
-        q_from_to = pf_data.branch_reactivepower_flow_from_to[:, 1]
-        q_to_from = pf_data.branch_reactivepower_flow_to_from[:, 1]
-    end
-
-    # Check each branch for overloads
-    for (branch_name, branch_idx) in pf_data.branch_lookup
-        # Get the branch from PowerSystems
-        branch = PSY.get_component(PSY.ACBranch, acc.sys, branch_name)
-        if isnothing(branch)
-            continue
-        end
-
-        # Get rating (in system natural units = MW or MVA)
-        rating = PSY.get_rating(branch)
-
-        if rating <= 0.0
-            continue  # Skip branches with no rating
-        end
-
-        # Calculate flow magnitude
-        if has_reactive
-            # AC power flow: use apparent power S = sqrt(P^2 + Q^2)
-            s_from_to = sqrt(p_from_to[branch_idx]^2 + q_from_to[branch_idx]^2)
-            s_to_from = sqrt(p_to_from[branch_idx]^2 + q_to_from[branch_idx]^2)
-            flow_magnitude = max(s_from_to, s_to_from)
-        else
-            # DC power flow: use active power only
-            flow_magnitude = max(abs(p_from_to[branch_idx]), abs(p_to_from[branch_idx]))
-        end
-
-        # Check for overload
-        overload = flow_magnitude - rating
-        if overload > 1e-6  # Small tolerance to avoid numerical noise
-            push!(acc.line_idx, branch_idx)
-            push!(acc.timestep, timestep)
-            push!(acc.sample_id, sample_id)
-            push!(acc.overload_mw, overload)
-            push!(acc.flow_mw, flow_magnitude)
-            push!(acc.rating_mw, rating)
         end
     end
 

@@ -1,0 +1,123 @@
+================================================================================
+RTS-GMLC Line Overloading Analysis
+================================================================================
+Configuration:
+  System variant: modified
+  Disaggregation method: ramp_aware
+  Output directory: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware
+  Samples: 1000
+  Random seed: 1234
+
+Loading RTS-GMLC Day-Ahead system...
+System loaded successfully!
+  System type: modified RTS-GMLC
+  Number of areas: 3
+  Number of branches: 121
+
+Setting up Monte Carlo simulation with power flow...
+Simulation configured:
+  Method: Sequential Monte Carlo
+  Power flow: DC Power Flow
+  Disaggregation: ramp_aware
+  Aggregation: By Area
+
+Running resource adequacy assessment with power flow...
+This may take several minutes...
+
+Assessment completed in 138.22 seconds
+
+================================================================================
+RESULTS SUMMARY
+================================================================================
+
+Reliability Metrics:
+  Loss of Load Expectation (LOLE): 0.812 events/period
+  Expected Unserved Energy (EUE): 144.4 MWh
+
+Power Flow Statistics:
+  Convergence rate: 100.0%
+
+Line Overload Metrics:
+  Total overload events: 203194
+  Maximum overload: 152.47 MW
+  Mean overload: 8.15 MW
+  Median overload: 6.03 MW
+  Samples with overloads: 1000 / 1000
+  Probability of any overload: 2.31%
+
+  Top 5 most overloaded lines:
+    1. A11: 203024 events (max: 76.51 MW)
+    2. AB1: 87 events (max: 46.22 MW)
+    3. CA-1: 58 events (max: 119.94 MW)
+    4. CB-1: 22 events (max: 152.47 MW)
+    5. C6: 2 events (max: 16.34 MW)
+
+================================================================================
+GENERATING VISUALIZATIONS
+================================================================================
+
+Creating heatmap: Overload count (samples × timesteps)...
+  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_count_heatmap.png
+Creating heatmap: Overload magnitude (samples × timesteps)...
+  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_magnitude_heatmap.png
+Creating heatmap: Per-line overload count (lines × timesteps)...
+  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_by_line_heatmap.png
+Creating heatmap: Per-line per-sample overload count...
+  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_by_line_sample_heatmap.png
+Creating histogram: Overload magnitudes...
+  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_magnitude_histogram.png
+Creating bar chart: Top 15 most overloaded lines...
+  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_top_lines.png
+Creating histogram: Overloads per sample...
+  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_per_sample_histogram.png
+Creating scatter plot: Overloads vs. unserved energy...
+  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_vs_eue.png
+Creating scatter plot: Max overload magnitude vs. unserved energy...
+  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_max_vs_eue.png
+Creating bar chart: Line overload probability ranking...
+  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_probability.png
+Creating time series: Overload events per timestep...
+  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_temporal_count.png
+Creating time series: Average overload magnitude per timestep...
+  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_temporal_magnitude.png
+Creating histogram: Flow utilization distribution...
+  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_utilization.png
+
+Correlation Analysis:
+  Correlation (overload count vs EUE): 0.13
+  Correlation (max overload vs EUE): 0.232
+  Samples with high overloads but low EUE: 186
+    (May indicate overloads don't always cause shortfall)
+
+================================================================================
+SUMMARY STATISTICS
+================================================================================
+
+Power Flow:
+  Convergence rate: 100.0%
+  Total solves: 8784000
+
+Overload Statistics:
+  Total overload events: 203194
+  Samples affected: 1000 / 1000 (100.0%)
+  Lines affected: 6 / 120
+  Timesteps affected: 3550 / 8784
+  Overall overload probability: 2.31%
+
+Top 5 Critical Lines:
+  1. A11
+     Events: 203024, Max: 76.51 MW, Prob: 2.31%
+  2. AB1
+     Events: 87, Max: 46.22 MW, Prob: 0.0%
+  3. CA-1
+     Events: 58, Max: 119.94 MW, Prob: 0.0%
+  4. CB-1
+     Events: 22, Max: 152.47 MW, Prob: 0.0%
+  5. C6
+     Events: 2, Max: 16.34 MW, Prob: 0.0%
+
+================================================================================
+ANALYSIS COMPLETE
+================================================================================
+Plots saved to: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware
+

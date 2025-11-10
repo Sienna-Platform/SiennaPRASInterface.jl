@@ -1,0 +1,114 @@
+================================================================================
+RTS-GMLC Ramp Violations Analysis
+================================================================================
+Configuration:
+  System variant: modified
+  Disaggregation method: ramp_aware
+  Output directory: /Users/jmckinse/Programming/PRASInterface.jl/results/ramp_violations/modified_ramp_aware
+  Samples: 1000
+  Random seed: 1234
+
+Loading RTS-GMLC Day-Ahead system...
+System loaded successfully!
+  System type: modified RTS-GMLC
+
+Setting up Monte Carlo simulation...
+Simulation configured:
+  Method: Sequential Monte Carlo
+  Aggregation: By Area
+  Disaggregation: ramp_aware
+
+Running resource adequacy assessment...
+
+Assessment completed in 31.59 seconds
+
+================================================================================
+RESULTS SUMMARY
+================================================================================
+
+Loss of Load Expectation (LOLE): 0.8 events/period
+Expected Unserved Energy (EUE): 139.23 MWh
+
+Ramp Violations:
+  Total violations: 5791815
+  Maximum violation: 5.7167 MW/min
+  Mean violation: 0.5898 MW/min
+  Median violation: 0.4167 MW/min
+  Samples with violations: 1000 / 1000
+
+  Top 5 generators with violations:
+    1. 123_STEAM_3: 2378358 violations
+    2. 116_STEAM_1: 1727313 violations
+    3. 115_STEAM_3: 856474 violations
+    4. 223_STEAM_1: 772662 violations
+    5. 201_STEAM_3: 35355 violations
+
+================================================================================
+GENERATING PLOTS
+================================================================================
+
+Creating histogram of ramp violation magnitudes...
+  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/ramp_violations/modified_ramp_aware/ramp_violations_histogram.png
+Creating heatmap of violation counts...
+  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/ramp_violations/modified_ramp_aware/ramp_violations_count_heatmap.png
+Creating heatmap of violation magnitudes...
+  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/ramp_violations/modified_ramp_aware/ramp_violations_magnitude_heatmap.png
+Creating bar plot of top generators...
+  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/ramp_violations/modified_ramp_aware/ramp_violations_generators.png
+Creating per-sample correlation plot...
+  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/ramp_violations/modified_ramp_aware/lostload_vs_ramp_violations.png
+Creating magnitude correlation plot...
+  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/ramp_violations/modified_ramp_aware/lostload_vs_ramp_magnitude.png
+
+Correlation Analysis:
+  Correlation (violation count vs EUE): -0.026
+  Correlation (violation magnitude vs EUE): -0.027
+  Samples with low violations but high EUE: 19
+    (This may indicate outages reducing violations)
+  Median violations per sample (excluding zeros): 5801.5
+  Samples below median (potential 'dark streaks'): 500 of 1000
+  Average EUE for low-violation samples: 140.22 MWh
+  Average EUE for all samples: 139.23 MWh
+  → Similar EUE between low and normal violation samples
+
+============================================================
+TIMESTEP-LEVEL OUTAGE ANALYSIS
+============================================================
+Timestep-level statistics:
+  Average violations when NO outages: 0.76
+  Average violations when outages occur: 0.64
+  Difference: 0.12 violations
+  Percent change: -16.0%
+  → Outages REDUCE violations by >5% (confirms hypothesis!)
+  Average violations when 3+ outages: 0.57
+  Correlation (outages vs violations at timestep level): -0.118
+
+Violation magnitude analysis:
+  Average magnitude when NO outages: 0.45 MW/min
+  Average magnitude when outages occur: 0.38 MW/min
+  Percent change: -16.3%
+
+Checking if outages → unserved energy:
+  Average shortfall when NO outages: 0.02 MW
+  Average shortfall when outages occur: 0.02 MW
+  → Unserved energy doesn't explain the violation reduction
+  Correlation (outages vs shortfall): 0.0
+
+Hypothesis check:
+  If outages preferentially remove inflexible generators,
+  then remaining generators are more flexible on average,
+  leading to fewer violations even with similar dispatch levels.
+
+  Key insight: PRAS regional dispatch accounts for outages
+  by reducing available capacity. The disaggregation then
+  distributes dispatch among remaining (potentially more flexible)
+  generators, and the offline generator can't violate constraints.
+
+Creating histogram of violations per sample...
+  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/ramp_violations/modified_ramp_aware/ramp_violations_per_sample.png
+
+================================================================================
+SIMULATION COMPLETE
+================================================================================
+Results and plots saved to: /Users/jmckinse/Programming/PRASInterface.jl/results/ramp_violations/modified_ramp_aware
+

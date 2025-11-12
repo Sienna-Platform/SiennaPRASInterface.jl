@@ -1,12 +1,14 @@
 @testset "RTS GMLC DA Error" begin
-    rts_da_sys = get_rts_gmlc_outage("DA")
+    rts_da_sys =
+        PSCB.build_system(PSCB.SPISystems, "RTS_GMLC_Hourly with Static Outage Data")
     PSY.remove_time_series!(rts_da_sys, PSY.SingleTimeSeries)
     @test_throws "System doesn't have any StaticTimeSeries." rts_pras_sys =
         generate_pras_system(rts_da_sys, PSY.Area)
 end
 
 @testset "RTS GMLC DA" begin
-    rts_da_sys = get_rts_gmlc_outage("DA")
+    rts_da_sys =
+        PSCB.build_system(PSCB.SPISystems, "RTS_GMLC_Hourly with Static Outage Data")
     area_names = PSY.get_name.(PSY.get_components(PSY.Area, rts_da_sys))
     generator_names =
         PSY.get_name.(
@@ -106,7 +108,8 @@ end
 end
 
 @testset "RTS GMLC DA with RATemplate" begin
-    rts_da_sys = get_rts_gmlc_outage("RT")
+    rts_da_sys =
+        PSCB.build_system(PSCB.SPISystems, "RTS_GMLC_Hourly with Static Outage Data")
     area_names = PSY.get_name.(PSY.get_components(PSY.Area, rts_da_sys))
     load_names = PSY.get_name.(PSY.get_components(PSY.StaticLoad, rts_da_sys))
     generator_names =

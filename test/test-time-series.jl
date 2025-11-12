@@ -1,55 +1,6 @@
 @testset "Test RTS-GMLC Time Series" begin
-    rts_da_sys = get_rts_gmlc_outage("DA")
-    rts_test_outage_ts_data = CSV.read(
-        joinpath(@__DIR__, "RTS_Test_Outage_Time_Series_Data.csv"),
-        DataFrames.DataFrame,
-    )
-
-    # Time series timestamps
-    filter_func = x -> (typeof(x) <: PSY.StaticTimeSeries)
-    all_ts = PSY.get_time_series_multiple(rts_da_sys, filter_func)
-    ts_timestamps = TimeSeries.timestamp(first(all_ts).data)
-    first_timestamp = first(ts_timestamps)
-
-    # Add λ and μ time series 
-    for row in DataFrames.eachrow(rts_test_outage_ts_data)
-        comp = PSY.get_component(PSY.Generator, rts_da_sys, row.Unit)
-        λ_vals = Float64[]
-        μ_vals = Float64[]
-        for i in range(0, length=12)
-            next_timestamp = first_timestamp + Dates.Month(i)
-            λ, μ = SiennaPRASInterface.rate_to_probability(row[3 + i], 48)
-            append!(λ_vals, fill(λ, (Dates.daysinmonth(next_timestamp) * 24)))
-            append!(μ_vals, fill(μ, (Dates.daysinmonth(next_timestamp) * 24)))
-        end
-        PSY.add_time_series!(
-            rts_da_sys,
-            first(
-                PSY.get_supplemental_attributes(
-                    PSY.GeometricDistributionForcedOutage,
-                    comp,
-                ),
-            ),
-            PSY.SingleTimeSeries(
-                "outage_probability",
-                TimeSeries.TimeArray(ts_timestamps, λ_vals),
-            ),
-        )
-        PSY.add_time_series!(
-            rts_da_sys,
-            first(
-                PSY.get_supplemental_attributes(
-                    PSY.GeometricDistributionForcedOutage,
-                    comp,
-                ),
-            ),
-            PSY.SingleTimeSeries(
-                "recovery_probability",
-                TimeSeries.TimeArray(ts_timestamps, μ_vals),
-            ),
-        )
-        @info "Added outage probability and recovery probability time series to supplemental attribute of $(row["Unit"]) generator"
-    end
+    rts_da_sys =
+        PSCB.build_system(PSCB.SPISystems, "RTS_GMLC_Hourly with TimeSeries Outage Data")
 
     num_samples = 100
     sequential_monte_carlo = SiennaPRASInterface.SequentialMonteCarlo(
@@ -94,7 +45,7 @@ end
 end
 
 @testset "Test TimeSeriesForcedOutage Avaialability Time Series Generation - RTS" begin
-    rts_sys = get_rts_gmlc_outage("DA")
+    rts_sys = PSCB.build_system(PSCB.SPISystems, "RTS_GMLC_Hourly with Static Outage Data")
     template =
         SiennaPRASInterface.RATemplate(PSY.Area, SiennaPRASInterface.DEFAULT_DEVICE_MODELS)
     sampling_method = SiennaPRASInterface.SequentialMonteCarlo(samples=10, seed=1)
@@ -106,20 +57,13 @@ end
                 PSY.Generator,
                 rts_sys,
             ),
-            PSY.TimeSeriesForcedOutage,
-        ),
-    )
-
-    @test all(
-        PSY.has_supplemental_attributes.(
-            PSY.get_components(PSY.Storage, rts_sys),
-            PSY.TimeSeriesForcedOutage,
+            PSY.GeometricDistributionForcedOutage,
         ),
     )
 
     @test all(
         PSY.has_time_series.(
-            PSY.get_supplemental_attributes(PSY.TimeSeriesForcedOutage, rts_sys)
+            PSY.get_supplemental_attributes(PSY.GeometricDistributionForcedOutage, rts_sys)
         ),
     )
 end

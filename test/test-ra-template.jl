@@ -3,7 +3,8 @@ keys_to_names(
 ) where {B <: SiennaPRASInterface.AbstractRAFormulation} = PSY.get_name.(collect(keys(x)))
 
 @testset "RATemplate formulation construction" begin
-    rts_da_sys = get_rts_gmlc_outage("RT")
+    rts_da_sys =
+        PSCB.build_system(PSCB.SPISystems, "RTS_GMLC_Hourly with Static Outage Data")
     load_names = PSY.get_name.(PSY.get_components(PSY.StaticLoad, rts_da_sys))
     generator_names =
         PSY.get_name.(

@@ -13,7 +13,8 @@ function test_shortfalls(shortfalls)
 end
 
 @testset "test assess(::PSY.System, ::Area, ...) Hourly PRAS System" begin
-    rts_da_sys = PSCB.build_system(PSCB.SPISystems,"RTS_GMLC_Hourly with Static Outage Data")
+    rts_da_sys =
+        PSCB.build_system(PSCB.SPISystems, "RTS_GMLC_Hourly with Static Outage Data")
 
     sequential_monte_carlo = SiennaPRASInterface.SequentialMonteCarlo(samples=2, seed=1)
     @testset "sys-area call" begin
@@ -68,7 +69,7 @@ end
 end
 
 @testset "test assess(::PSY.System, ::Area, ...) Sub-Hourly System" begin
-    rts_rt_sys = get_rts_gmlc_outage("RT")
+    rts_rt_sys = PSCB.build_system(PSCB.SPISystems, "RTS_GMLC_5min with Static Outage Data")
 
     sequential_monte_carlo = SiennaPRASInterface.SequentialMonteCarlo(samples=2, seed=1)
     shortfalls, = SiennaPRASInterface.assess(

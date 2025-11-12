@@ -14,7 +14,7 @@ using Dates: DateTime
 const PSY = PowerSystems
 const PSCB = PowerSystemCaseBuilder
 
-include("rts_gmlc.jl")
+#include("rts_gmlc.jl")
 include("comparison_utils.jl")
 
 @testset "Aqua.jl" begin

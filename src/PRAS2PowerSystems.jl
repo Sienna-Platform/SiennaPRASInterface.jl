@@ -117,15 +117,29 @@ function add_asset_status!(sys::PSY.System, results::SPIOutageResult, template::
         for gen in keys(gens_to_formula)
             pras_gen_names = getfield(result, device_ramodel.key)
             if (gen.name in pras_gen_names)
-                if (PSY.has_supplemental_attributes(PSY.GeometricDistributionForcedOutage, gen))
+                if (PSY.has_supplemental_attributes(
+                    PSY.GeometricDistributionForcedOutage,
+                    gen,
+                ))
                     availability_data = TimeSeries.TimeArray(
                         ts_timestamps,
                         getindex.(result[gen.name, :], sample_idx),
                     )
-                    availability_timeseries =
-                        PSY.SingleTimeSeries("WorstShortfallSample_Availability_$(gen.name)", availability_data)
+                    availability_timeseries = PSY.SingleTimeSeries(
+                        "WorstShortfallSample_Availability_$(gen.name)",
+                        availability_data,
+                    )
 
-                    PSY.add_time_series!(sys, first(PSY.get_supplemental_attributes(PSY.GeometricDistributionForcedOutage,gen,),), availability_timeseries)
+                    PSY.add_time_series!(
+                        sys,
+                        first(
+                            PSY.get_supplemental_attributes(
+                                PSY.GeometricDistributionForcedOutage,
+                                gen,
+                            ),
+                        ),
+                        availability_timeseries,
+                    )
                     @debug "Added availability time series to TimeSeriesForcedOutage supplemental attribute of $(gen.name)."
                 else
                     @debug "Asset availability time series is available for $(gen.name) of $(typeof(gen)) type, but this generator doesn't have a GeometricDistributionForcedOutage SupplementalAttribute associated with it. "
@@ -136,4 +150,3 @@ function add_asset_status!(sys::PSY.System, results::SPIOutageResult, template::
         end
     end
 end
-

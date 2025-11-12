@@ -24,70 +24,60 @@ Simulation configured:
 Running resource adequacy assessment with power flow...
 This may take several minutes...
 
-Assessment completed in 138.22 seconds
+Assessment completed in 137.81 seconds
 
 ================================================================================
 RESULTS SUMMARY
 ================================================================================
 
 Reliability Metrics:
-  Loss of Load Expectation (LOLE): 0.812 events/period
-  Expected Unserved Energy (EUE): 144.4 MWh
+  Loss of Load Expectation (LOLE): 0.751 events/period
+  Expected Unserved Energy (EUE): 133.37 MWh
 
 Power Flow Statistics:
   Convergence rate: 100.0%
 
 Line Overload Metrics:
-  Total overload events: 203194
-  Maximum overload: 152.47 MW
-  Mean overload: 8.15 MW
-  Median overload: 6.03 MW
+  Total overload events: 587238
+  Maximum overload: 163.22 MW
+  Mean overload: 15.81 MW
+  Median overload: 15.01 MW
   Samples with overloads: 1000 / 1000
-  Probability of any overload: 2.31%
+  Probability of any overload: 6.68%
 
   Top 5 most overloaded lines:
-    1. A11: 203024 events (max: 76.51 MW)
-    2. AB1: 87 events (max: 46.22 MW)
-    3. CA-1: 58 events (max: 119.94 MW)
-    4. CB-1: 22 events (max: 152.47 MW)
-    5. C6: 2 events (max: 16.34 MW)
+    1. A11: 587085 events (max: 83.87 MW)
+    2. CA-1: 67 events (max: 163.22 MW)
+    3. AB1: 52 events (max: 35.12 MW)
+    4. CB-1: 26 events (max: 98.38 MW)
+    5. C6: 8 events (max: 27.39 MW)
+
+================================================================================
+SAVING RESULTS
+================================================================================
 
 ================================================================================
 GENERATING VISUALIZATIONS
 ================================================================================
 
-Creating heatmap: Overload count (samples × timesteps)...
-  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_count_heatmap.png
-Creating heatmap: Overload magnitude (samples × timesteps)...
-  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_magnitude_heatmap.png
-Creating heatmap: Per-line overload count (lines × timesteps)...
-  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_by_line_heatmap.png
-Creating heatmap: Per-line per-sample overload count...
-  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_by_line_sample_heatmap.png
-Creating histogram: Overload magnitudes...
-  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_magnitude_histogram.png
-Creating bar chart: Top 15 most overloaded lines...
-  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_top_lines.png
-Creating histogram: Overloads per sample...
-  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_per_sample_histogram.png
-Creating scatter plot: Overloads vs. unserved energy...
-  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_vs_eue.png
-Creating scatter plot: Max overload magnitude vs. unserved energy...
-  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_max_vs_eue.png
-Creating bar chart: Line overload probability ranking...
-  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_probability.png
-Creating time series: Overload events per timestep...
-  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_temporal_count.png
-Creating time series: Average overload magnitude per timestep...
-  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_temporal_magnitude.png
-Creating histogram: Flow utilization distribution...
-  Saved: /Users/jmckinse/Programming/PRASInterface.jl/results/line_overloading/modified_ramp_aware/line_overload_utilization.png
-
-Correlation Analysis:
-  Correlation (overload count vs EUE): 0.13
-  Correlation (max overload vs EUE): 0.232
-  Samples with high overloads but low EUE: 186
-    (May indicate overloads don't always cause shortfall)
+Generating line overload plots...
+  Creating heatmaps...
+    Saved: line_overload_count_heatmap.png
+    Saved: line_overload_magnitude_heatmap.png
+    Saved: line_overload_by_line_heatmap.png
+    Saved: line_overload_by_line_sample_heatmap.png
+  Creating distribution plots...
+    Saved: line_overload_magnitude_histogram.png
+    Saved: line_overload_top_lines.png
+    Saved: line_overload_per_sample_histogram.png
+    Saved: line_overload_probability.png
+  Creating correlation plots...
+    Saved: line_overload_vs_eue.png
+    Saved: line_overload_max_vs_eue.png
+  Creating temporal plots...
+    Saved: line_overload_temporal_count.png
+    Saved: line_overload_temporal_magnitude.png
+    Saved: line_overload_utilization.png
 
 ================================================================================
 SUMMARY STATISTICS
@@ -98,23 +88,23 @@ Power Flow:
   Total solves: 8784000
 
 Overload Statistics:
-  Total overload events: 203194
+  Total overload events: 587238
   Samples affected: 1000 / 1000 (100.0%)
-  Lines affected: 6 / 120
-  Timesteps affected: 3550 / 8784
-  Overall overload probability: 2.31%
+  Lines affected: 5 / 120
+  Timesteps affected: 3687 / 8784
+  Overall overload probability: 6.68%
 
 Top 5 Critical Lines:
   1. A11
-     Events: 203024, Max: 76.51 MW, Prob: 2.31%
-  2. AB1
-     Events: 87, Max: 46.22 MW, Prob: 0.0%
-  3. CA-1
-     Events: 58, Max: 119.94 MW, Prob: 0.0%
+     Events: 587085, Max: 83.87 MW, Prob: 6.68%
+  2. CA-1
+     Events: 67, Max: 163.22 MW, Prob: 0.0%
+  3. AB1
+     Events: 52, Max: 35.12 MW, Prob: 0.0%
   4. CB-1
-     Events: 22, Max: 152.47 MW, Prob: 0.0%
+     Events: 26, Max: 98.38 MW, Prob: 0.0%
   5. C6
-     Events: 2, Max: 16.34 MW, Prob: 0.0%
+     Events: 8, Max: 27.39 MW, Prob: 0.0%
 
 ================================================================================
 ANALYSIS COMPLETE

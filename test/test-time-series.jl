@@ -87,14 +87,8 @@ end
     sampling_method = SiennaPRASInterface.SequentialMonteCarlo(samples=10, seed=1)
     generate_outage_profile!(pjm_sys, template, sampling_method)
     @test all(
-        PSY.has_supplemental_attributes.(
-            PSY.get_components(PSY.Generator, pjm_sys),
-            PSY.TimeSeriesForcedOutage,
-        ),
-    )
-    @test all(
         PSY.has_time_series.(
-            PSY.get_supplemental_attributes(PSY.TimeSeriesForcedOutage, pjm_sys)
+            PSY.get_supplemental_attributes(PSY.GeometricDistributionForcedOutage, pjm_sys)
         ),
     )
 end

@@ -648,8 +648,8 @@ function process_lines(
 )
     # Lines
     num_lines = length(sorted_lines)
-    line_names = PSY.get_name.(sorted_lines)
-    line_cats = line_type.(sorted_lines)
+    line_names = (num_lines == 0) ? String[] : PSY.get_name.(sorted_lines)
+    line_cats = (num_lines == 0) ? String[] : line_type.(sorted_lines)
 
     line_forward_cap = Matrix{Int64}(undef, num_lines, s2p_meta.N)
     line_backward_cap = Matrix{Int64}(undef, num_lines, s2p_meta.N)

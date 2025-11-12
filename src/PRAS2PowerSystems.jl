@@ -2,7 +2,7 @@
     $(TYPEDSIGNATURES)
 
 Analyze resource adequacy using Monte Carlo simulation and add the asset status from the worst sample
-to PSY.TimeSeriesForcedOutage of the component.
+to PSY.GeometricDistributionForcedOutage of the component.
 
 # Arguments
 
@@ -12,7 +12,7 @@ to PSY.TimeSeriesForcedOutage of the component.
 
 # Returns
 
- - PSY System with PSY.TimeSeriesForcedOutage for all components for which asset status is available
+ - PSY System with asset availability times series added to PSY.GeometricDistributionForcedOutage for all components for which asset status is available
 """
 function generate_outage_profile!(
     sys::PSY.System,
@@ -33,7 +33,7 @@ end
     ) where {AT <: PSY.AggregationTopology, RM <: PRASCore.Results.ReliabilityMetric}
 
 Analyze resource adequacy using Monte Carlo simulation and add the asset status from the worst sample
-to PSY.TimeSeriesForcedOutage of the component.
+to PSY.GeometricDistributionForcedOutage of the component.
 
 # Arguments
 
@@ -43,7 +43,7 @@ to PSY.TimeSeriesForcedOutage of the component.
 
 # Returns
 
-  - PSY System with PSY.TimeSeriesForcedOutage for all components for which asset status is available
+  - PSY System with asset availability times series added to PSY.GeometricDistributionForcedOutage for all components for which asset status is available
 """
 function generate_outage_profile!(
     sys::PSY.System,
@@ -59,7 +59,7 @@ end
     $(TYPEDSIGNATURES)
 
 Analyze resource adequacy using Monte Carlo simulation and add the asset status from the worst sample
-to PSY.TimeSeriesForcedOutage of the component.
+to PSY.GeometricDistributionForcedOutage of the component.
 
 Uses default template with PSY.Area AggregationTopology.
 
@@ -70,7 +70,7 @@ Uses default template with PSY.Area AggregationTopology.
 
 # Returns
 
-    - PSY System with PSY.TimeSeriesForcedOutage for all components for which asset status is available
+    - PSY System with asset availability times series added to PSY.GeometricDistributionForcedOutage for all components for which asset status is available
 """
 function generate_outage_profile!(sys::PSY.System, method::PRASCore.SequentialMonteCarlo)
     sys = generate_outage_profile!(sys, DEFAULT_TEMPLATE, method)
@@ -80,7 +80,7 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Add the asset status from the worst sample to PSY.TimeSeriesForcedOutage of the component.
+Add the asset status from the worst sample to GeometricDistributionForcedOutage of the component.
 
 # Arguments
 
@@ -90,7 +90,7 @@ Add the asset status from the worst sample to PSY.TimeSeriesForcedOutage of the 
   
 # Returns
 
-    - PSY System with PSY.TimeSeriesForcedOutage for all components for which asset status is available
+    - PSY System with asset availability times series added to PSY.GeometricDistributionForcedOutage for all components for which asset status is available
 """
 function add_asset_status!(sys::PSY.System, results::SPIOutageResult, template::RATemplate)
     # Time series timestamps
@@ -117,23 +117,23 @@ function add_asset_status!(sys::PSY.System, results::SPIOutageResult, template::
         for gen in keys(gens_to_formula)
             pras_gen_names = getfield(result, device_ramodel.key)
             if (gen.name in pras_gen_names)
-                ts_forced_outage = PSY.TimeSeriesForcedOutage(;
-                    outage_status_scenario="WorstShortfallSample",
-                )
-                PSY.add_supplemental_attribute!(sys, gen, ts_forced_outage)
+                if (PSY.has_supplemental_attributes(PSY.GeometricDistributionForcedOutage, gen))
+                    availability_data = TimeSeries.TimeArray(
+                        ts_timestamps,
+                        getindex.(result[gen.name, :], sample_idx),
+                    )
+                    availability_timeseries =
+                        PSY.SingleTimeSeries("WorstShortfallSample_Availability_$(gen.name)", availability_data)
 
-                availability_data = TimeSeries.TimeArray(
-                    ts_timestamps,
-                    getindex.(result[gen.name, :], sample_idx),
-                )
-                availability_timeseries =
-                    PSY.SingleTimeSeries("availability", availability_data)
-
-                PSY.add_time_series!(sys, ts_forced_outage, availability_timeseries)
-                @debug "Added availability time series to TimeSeriesForcedOutage supplemental attribute of $(gen.name)."
+                    PSY.add_time_series!(sys, first(PSY.get_supplemental_attributes(PSY.GeometricDistributionForcedOutage,gen,),), availability_timeseries)
+                    @debug "Added availability time series to TimeSeriesForcedOutage supplemental attribute of $(gen.name)."
+                else
+                    @debug "Asset availability time series is available for $(gen.name) of $(typeof(gen)) type, but this generator doesn't have a GeometricDistributionForcedOutage SupplementalAttribute associated with it. "
+                end
             else
                 @debug "Asset availability time series not available for $(gen.name) of $(typeof(gen)) type. This generator either has zero max active power or was lumped based on the formulation."
             end
         end
     end
 end
+

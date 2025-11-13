@@ -34,15 +34,17 @@ include("plots.jl")
 
 function parse_arguments()
     if length(ARGS) < 3
-        error("Usage: julia plot_line_comparisons.jl <result_file1> <result_file2> ... <output_dir>\n" *
-              "At least 2 result files and an output directory are required.")
+        error(
+            "Usage: julia plot_line_comparisons.jl <result_file1> <result_file2> ... <output_dir>\n" *
+            "At least 2 result files and an output directory are required.",
+        )
     end
 
     # Last argument is output directory
     output_dir = ARGS[end]
 
     # All other arguments are result files
-    result_files = ARGS[1:end-1]
+    result_files = ARGS[1:(end - 1)]
 
     # Verify all files exist
     for file in result_files
@@ -80,9 +82,11 @@ for (i, result_file) in enumerate(result_files)
 
     # Verify this file contains line_overload
     if !haskey(data, "line_overload")
-        error("Result file does not contain 'line_overload': $result_file\n" *
-              "Expected keys: line_overload, shortfall\n" *
-              "Found keys: $(keys(data))")
+        error(
+            "Result file does not contain 'line_overload': $result_file\n" *
+            "Expected keys: line_overload, shortfall\n" *
+            "Found keys: $(keys(data))",
+        )
     end
 
     push!(results_list, data)
@@ -150,13 +154,20 @@ p1 = plot(;
     xlabel="Overload Magnitude (MW over rating)",
     ylabel="Count",
     title="Line Overload Magnitude Distribution Comparison",
-    legend=:topright
+    legend=:topright,
 )
 
 colors = [:purple, :orange, :green, :red, :blue, :brown]
 for (i, (overloads, label)) in enumerate(zip(all_overloads, labels))
     if length(overloads) > 0
-        stephist!(p1, overloads, bins=50, label=label, color=colors[mod1(i, length(colors))], linewidth=2)
+        stephist!(
+            p1,
+            overloads,
+            bins=50,
+            label=label,
+            color=colors[mod1(i, length(colors))],
+            linewidth=2,
+        )
     end
 end
 
@@ -165,22 +176,6 @@ println("  Saved: line_overload_magnitude_comparison.png")
 
 # Plot 2: Overlay histogram of overloads per sample
 println("Creating overloads per sample comparison...")
-p2 = plot(;
-    xlabel="Overloads per Sample",
-    ylabel="Count",
-    title="Overloads per Sample Distribution Comparison",
-    legend=:topright
-)
-
-for (i, (counts, label)) in enumerate(zip(all_per_sample, labels))
-    stephist!(p2, counts, bins=50, label=label, color=colors[mod1(i, length(colors))], linewidth=2)
-end
-
-savefig(p2, joinpath(output_dir, "line_overload_per_sample_comparison.png"))
-println("  Saved: line_overload_per_sample_comparison.png")
-
-# Plot 3: Overlay scatter - overload magnitude vs EUE for each method
-println("Creating overload magnitude vs EUE comparison...")
 
 # Calculate per-sample overload magnitude (sum of MW over rating)
 all_per_sample_magnitude = []
@@ -194,17 +189,50 @@ for (result, label) in zip(results_list, labels)
     push!(all_per_sample_magnitude, sample_magnitudes)
 end
 
+p2 = plot(;
+    xlabel="Total Overloads (MW) per Sample",
+    ylabel="Count",
+    title="Overloads per Sample Distribution Comparison",
+    legend=:topright,
+)
+
+for (i, (counts, label)) in enumerate(zip(all_per_sample_magnitude, labels))
+    stephist!(
+        p2,
+        counts,
+        bins=50,
+        label=label,
+        color=colors[mod1(i, length(colors))],
+        linewidth=2,
+    )
+end
+
+savefig(p2, joinpath(output_dir, "line_overload_per_sample_comparison.png"))
+println("  Saved: line_overload_per_sample_comparison.png")
+
+# Plot 3: Overlay scatter - overload magnitude vs EUE for each method
+println("Creating overload magnitude vs EUE comparison...")
+
 p3 = scatter(;
     xlabel="Total Overload Magnitude per Sample (MW)",
     ylabel="Unserved Energy per Sample (MWh)",
     title="Overload Magnitude vs EUE Comparison",
     legend=:topright,
     alpha=0.5,
-    markersize=3
+    markersize=3,
 )
 
-for (i, (mags, eue, label)) in enumerate(zip(all_per_sample_magnitude, all_shortfalls, labels))
-    scatter!(p3, mags, eue, label=label, color=colors[mod1(i, length(colors))], alpha=0.5, markersize=3)
+for (i, (mags, eue, label)) in
+    enumerate(zip(all_per_sample_magnitude, all_shortfalls, labels))
+    scatter!(
+        p3,
+        mags,
+        eue,
+        label=label,
+        color=colors[mod1(i, length(colors))],
+        alpha=0.5,
+        markersize=3,
+    )
 end
 
 savefig(p3, joinpath(output_dir, "line_overload_vs_eue_comparison.png"))
@@ -271,7 +299,7 @@ if length(all_line_names) > 0
     for name in top_common_lines
         parts = split(name, "-")
         if length(parts) >= 2
-            short_name = join(parts[end-1:end], "-")
+            short_name = join(parts[(end - 1):end], "-")
         else
             short_name = name
         end
@@ -290,7 +318,7 @@ if length(all_line_names) > 0
         legend=:topright,
         size=(1000, 600),
         bottom_margin=15Plots.mm,
-        left_margin=10Plots.mm
+        left_margin=10Plots.mm,
     )
 
     savefig(p4, joinpath(output_dir, "line_overload_top_lines_comparison.png"))
@@ -303,8 +331,15 @@ println("="^80)
 println("SUMMARY STATISTICS COMPARISON")
 println("="^80)
 println()
-println(rpad("Method", 30), rpad("Total OLs", 12), rpad("Mean Mag", 12), rpad("Median Mag", 12), rpad("Conv Rate", 12), "Samples")
-println("-" ^90)
+println(
+    rpad("Method", 30),
+    rpad("Total OLs", 12),
+    rpad("Mean Mag", 12),
+    rpad("Median Mag", 12),
+    rpad("Conv Rate", 12),
+    "Samples",
+)
+println("-"^90)
 
 for (result, label, conv_rate) in zip(results_list, labels, all_convergence_rates)
     overload_result = result["line_overload"]
@@ -315,19 +350,21 @@ for (result, label, conv_rate) in zip(results_list, labels, all_convergence_rate
     mean_val = length(overloads) > 0 ? mean(overloads) : 0.0
     median_val = length(overloads) > 0 ? median(overloads) : 0.0
 
-    println(rpad(label, 30),
-            rpad(string(total), 12),
-            rpad(string(round(mean_val, digits=2)), 12),
-            rpad(string(round(median_val, digits=2)), 12),
-            rpad(string(round(100 * conv_rate, digits=1)) * "%", 12),
-            samples_affected)
+    println(
+        rpad(label, 30),
+        rpad(string(total), 12),
+        rpad(string(round(mean_val, digits=2)), 12),
+        rpad(string(round(median_val, digits=2)), 12),
+        rpad(string(round(100 * conv_rate, digits=1)) * "%", 12),
+        samples_affected,
+    )
 end
-println("-" ^90)
+println("-"^90)
 println()
 
 # Correlation statistics
 println("Correlation (Overload Magnitude vs EUE):")
-println("-" ^50)
+println("-"^50)
 for (mags, eue, label) in zip(all_per_sample_magnitude, all_shortfalls, labels)
     nonzero_mask = (mags .> 0) .| (eue .> 0)
     if sum(nonzero_mask) > 1
@@ -337,7 +374,7 @@ for (mags, eue, label) in zip(all_per_sample_magnitude, all_shortfalls, labels)
         println(rpad(label, 30), "insufficient data")
     end
 end
-println("-" ^50)
+println("-"^50)
 println()
 
 println("="^80)

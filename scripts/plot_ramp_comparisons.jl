@@ -32,15 +32,17 @@ include("plots.jl")
 
 function parse_arguments()
     if length(ARGS) < 3
-        error("Usage: julia plot_ramp_comparisons.jl <result_file1> <result_file2> ... <output_dir>\n" *
-              "At least 2 result files and an output directory are required.")
+        error(
+            "Usage: julia plot_ramp_comparisons.jl <result_file1> <result_file2> ... <output_dir>\n" *
+            "At least 2 result files and an output directory are required.",
+        )
     end
 
     # Last argument is output directory
     output_dir = ARGS[end]
 
     # All other arguments are result files
-    result_files = ARGS[1:end-1]
+    result_files = ARGS[1:(end - 1)]
 
     # Verify all files exist
     for file in result_files
@@ -78,9 +80,11 @@ for (i, result_file) in enumerate(result_files)
 
     # Verify this file contains ramp_violations
     if !haskey(data, "ramp_violations")
-        error("Result file does not contain 'ramp_violations': $result_file\n" *
-              "Expected keys: ramp_violations, shortfall\n" *
-              "Found keys: $(keys(data))")
+        error(
+            "Result file does not contain 'ramp_violations': $result_file\n" *
+            "Expected keys: ramp_violations, shortfall\n" *
+            "Found keys: $(keys(data))",
+        )
     end
 
     push!(results_list, data)
@@ -146,30 +150,57 @@ p1 = plot(;
     xlabel="Violation Magnitude (MW/min)",
     ylabel="Count",
     title="Ramp Violation Magnitude Distribution Comparison",
-    legend=:topright
+    legend=:topright,
 )
 
 colors = [:purple, :orange, :green, :red, :blue, :brown]
 for (i, (viols, label)) in enumerate(zip(all_violations, labels))
     if length(viols) > 0
-        stephist!(p1, viols, bins=50, label=label, color=colors[mod1(i, length(colors))], linewidth=2)
+        stephist!(
+            p1,
+            viols,
+            bins=50,
+            label=label,
+            color=colors[mod1(i, length(colors))],
+            linewidth=2,
+        )
     end
 end
 
 savefig(p1, joinpath(output_dir, "ramp_violations_magnitude_comparison.png"))
 println("  Saved: ramp_violations_magnitude_comparison.png")
 
+# Calculate per-sample violation magnitude (sum of absolute violations)
+all_per_sample_magnitude = []
+for (result, label) in zip(results_list, labels)
+    ramp_result = result["ramp_violations"]
+    NUM_SAMPLES = length(unique(ramp_result.ramp_violation.sampleid))
+    sample_magnitudes = zeros(Float64, NUM_SAMPLES)
+    for (sampleid, mag) in
+        zip(ramp_result.ramp_violation.sampleid, ramp_result.ramp_violation.value)
+        sample_magnitudes[sampleid] += abs(mag)
+    end
+    push!(all_per_sample_magnitude, sample_magnitudes)
+end
+
 # Plot 2: Overlay histogram of violations per sample
 println("Creating violations per sample comparison...")
 p2 = plot(;
-    xlabel="Violations per Sample",
-    ylabel="Count",
+    xlabel="Total Violations (MW / min) per Sample",
+    ylabel="Total Magnitude",
     title="Violations per Sample Distribution Comparison",
-    legend=:topright
+    legend=:topright,
 )
 
-for (i, (counts, label)) in enumerate(zip(all_per_sample, labels))
-    stephist!(p2, counts, bins=50, label=label, color=colors[mod1(i, length(colors))], linewidth=2)
+for (i, (counts, label)) in enumerate(zip(all_per_sample_magnitude, labels))
+    stephist!(
+        p2,
+        counts,
+        bins=50,
+        label=label,
+        color=colors[mod1(i, length(colors))],
+        linewidth=2,
+    )
 end
 
 savefig(p2, joinpath(output_dir, "ramp_violations_per_sample_comparison.png"))
@@ -178,29 +209,26 @@ println("  Saved: ramp_violations_per_sample_comparison.png")
 # Plot 3: Overlay scatter - violation magnitude vs EUE for each method
 println("Creating violation magnitude vs EUE comparison...")
 
-# Calculate per-sample violation magnitude (sum of absolute violations)
-all_per_sample_magnitude = []
-for (result, label) in zip(results_list, labels)
-    ramp_result = result["ramp_violations"]
-    NUM_SAMPLES = length(unique(ramp_result.ramp_violation.sampleid))
-    sample_magnitudes = zeros(Float64, NUM_SAMPLES)
-    for (sampleid, mag) in zip(ramp_result.ramp_violation.sampleid, ramp_result.ramp_violation.value)
-        sample_magnitudes[sampleid] += abs(mag)
-    end
-    push!(all_per_sample_magnitude, sample_magnitudes)
-end
-
 p3 = scatter(;
     xlabel="Total Violation Magnitude per Sample (MW/min)",
     ylabel="Unserved Energy per Sample (MWh)",
     title="Violation Magnitude vs EUE Comparison",
     legend=:topright,
     alpha=0.5,
-    markersize=3
+    markersize=3,
 )
 
-for (i, (mags, eue, label)) in enumerate(zip(all_per_sample_magnitude, all_shortfalls, labels))
-    scatter!(p3, mags, eue, label=label, color=colors[mod1(i, length(colors))], alpha=0.5, markersize=3)
+for (i, (mags, eue, label)) in
+    enumerate(zip(all_per_sample_magnitude, all_shortfalls, labels))
+    scatter!(
+        p3,
+        mags,
+        eue,
+        label=label,
+        color=colors[mod1(i, length(colors))],
+        alpha=0.5,
+        markersize=3,
+    )
 end
 
 savefig(p3, joinpath(output_dir, "ramp_violations_vs_eue_comparison.png"))
@@ -212,8 +240,14 @@ println("="^80)
 println("SUMMARY STATISTICS COMPARISON")
 println("="^80)
 println()
-println(rpad("Method", 30), rpad("Total Viols", 15), rpad("Mean Mag", 15), rpad("Median Mag", 15), "Samples Affected")
-println("-" ^90)
+println(
+    rpad("Method", 30),
+    rpad("Total Viols", 15),
+    rpad("Mean Mag", 15),
+    rpad("Median Mag", 15),
+    "Samples Affected",
+)
+println("-"^90)
 
 for (result, label) in zip(results_list, labels)
     ramp_result = result["ramp_violations"]
@@ -224,18 +258,20 @@ for (result, label) in zip(results_list, labels)
     mean_val = length(violations) > 0 ? mean(violations) : 0.0
     median_val = length(violations) > 0 ? median(violations) : 0.0
 
-    println(rpad(label, 30),
-            rpad(string(total), 15),
-            rpad(string(round(mean_val, digits=2)), 15),
-            rpad(string(round(median_val, digits=2)), 15),
-            samples_affected)
+    println(
+        rpad(label, 30),
+        rpad(string(total), 15),
+        rpad(string(round(mean_val, digits=2)), 15),
+        rpad(string(round(median_val, digits=2)), 15),
+        samples_affected,
+    )
 end
-println("-" ^90)
+println("-"^90)
 println()
 
 # Correlation statistics
 println("Correlation (Violation Magnitude vs EUE):")
-println("-" ^50)
+println("-"^50)
 for (mags, eue, label) in zip(all_per_sample_magnitude, all_shortfalls, labels)
     nonzero_mask = (mags .> 0) .| (eue .> 0)
     if sum(nonzero_mask) > 1
@@ -245,7 +281,7 @@ for (mags, eue, label) in zip(all_per_sample_magnitude, all_shortfalls, labels)
         println(rpad(label, 30), "insufficient data")
     end
 end
-println("-" ^50)
+println("-"^50)
 println()
 
 println("="^80)

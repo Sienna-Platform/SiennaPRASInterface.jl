@@ -454,11 +454,13 @@ function assign_to_gen_stor_matrices!(
     formulation::HybridSystemPRAS,
     g_s::PSY.Device,
     s2p_meta::S2P_metadata,
+    turbine_to_reservoir_mapping::Union{Nothing, Dict{PSY.HydroUnit, PSY.HydroReservoir}},
     charge_cap_array,
     discharge_cap_array,
     inflow_array,
     energy_cap_array,
     gridinj_cap_array,
+    gridwdr_cap_array,
 )
     fill!(
         charge_cap_array,
@@ -470,9 +472,14 @@ function assign_to_gen_stor_matrices!(
     )
     fill!(
         energy_cap_array,
-        floor(Int, PSY.get_state_of_charge_limits(PSY.get_storage(g_s)).max),
+        floor(
+            Int,
+            PSY.storage_level_limits(PSY.get_storage(g_s)).max *
+            PSY.get_storage_capacity(PSY.get_storage(g_s)),
+        ),
     )
     fill!(gridinj_cap_array, floor(Int, PSY.get_output_active_power_limits(g_s).max))
+    fill!(gridwdr_cap_array, floor(Int, PSY.get_input_active_power_limits(g_s).max))
 
     if (PSY.has_time_series(
         PSY.get_renewable_unit(g_s),
@@ -497,35 +504,69 @@ end
 Apply HydroEnergyReservoir Formulation to fill in a row of a PRAS Matrix.
 Views should be passed in for all arrays.
 """
+# Charging to GeneratorStorage is limited by charge_capacity whether from grid or from 
+# inflows. So, that charge_capacity should be at least equal to the inflow timeseries.
+# If other constraints exists (penstock?), and need to represented, this could be represented
+#  as well.
+# Powerflow into grid is limited by grid_injection, which can come from discharge
+# and/or exogenous inflow. gridinjcap should be turbine dispatch limit
+# Discharge capacity can be the turbine dispatch limit or 
+# arbitrarily high because this represents discharge from reservoir to turbine +
+# inflows
+# Energy capacity can be arbitrarily high in the absence of reservoir limit to 
+# ensure month to month energy energy carryover.
+# Gridwithdrawl capacity is limited by pump capacity and eventually also by the 
+# charge capacity
 function assign_to_gen_stor_matrices!(
     formulation::HydroEnergyReservoirPRAS,
     g_s::PSY.Device,
     s2p_meta::S2P_metadata,
+    turbine_to_reservoir_mapping::Union{Nothing, Dict{PSY.HydroUnit, PSY.HydroReservoir}},
     charge_cap_array,
     discharge_cap_array,
     inflow_array,
     energy_cap_array,
     gridinj_cap_array,
+    gridwdr_cap_array,
 )
     if (PSY.has_time_series(g_s))
-        if (PSY.has_time_series(g_s, PSY.SingleTimeSeries, get_inflow(formulation)))
-            charge_cap_array .= get_pras_array_from_timeseries(g_s, get_inflow(formulation))
-            discharge_cap_array .= charge_cap_array
+        if (PSY.has_time_series(
+            turbine_to_reservoir_mapping[g_s],
+            PSY.SingleTimeSeries,
+            get_inflow(formulation),
+        ))
+            charge_cap_array .= get_pras_array_from_timeseries(
+                turbine_to_reservoir_mapping[g_s],
+                get_inflow(formulation),
+            )
             inflow_array .= charge_cap_array
         else
-            fill!(charge_cap_array, floor(Int, PSY.get_inflow(g_s)))
-            fill!(discharge_cap_array, floor(Int, PSY.get_inflow(g_s)))
-            fill!(inflow_array, floor(Int, PSY.get_inflow(g_s)))
+            fill!(
+                charge_cap_array,
+                floor(Int, PSY.get_inflow(turbine_to_reservoir_mapping[g_s])),
+            )
+            fill!(
+                inflow_array,
+                floor(Int, PSY.get_inflow(turbine_to_reservoir_mapping[g_s])),
+            )
         end
         if (PSY.has_time_series(
-            g_s,
+            turbine_to_reservoir_mapping[g_s],
             PSY.SingleTimeSeries,
             get_storage_capacity(formulation),
         ))
-            energy_cap_array .=
-                get_pras_array_from_timeseries(g_s, get_storage_capacity(formulation))
+            energy_cap_array .= get_pras_array_from_timeseries(
+                turbine_to_reservoir_mapping[g_s],
+                get_storage_capacity(formulation),
+            )
         else
-            fill!(energy_cap_array, floor(Int, PSY.get_storage_capacity(g_s)))
+            fill!(
+                energy_cap_array,
+                floor(
+                    Int,
+                    PSY.get_storage_level_limits(turbine_to_reservoir_mapping[g_s]).max,
+                ),
+            )
         end
         if (PSY.has_time_series(
             g_s,
@@ -534,14 +575,22 @@ function assign_to_gen_stor_matrices!(
         ))
             gridinj_cap_array .=
                 get_pras_array_from_timeseries(g_s, get_max_active_power(formulation))
+            discharge_cap_array .= gridinj_cap_array
         else
             fill!(gridinj_cap_array, floor(Int, PSY.get_max_active_power(g_s)))
+            fill!(discharge_cap_array, floor(Int, PSY.get_max_active_power(g_s)))
         end
     else
-        fill!(charge_cap_array, floor(Int, PSY.get_inflow(g_s)))
-        fill!(discharge_cap_array, floor(Int, PSY.get_inflow(g_s)))
-        fill!(energy_cap_array, floor(Int, PSY.get_storage_capacity(g_s)))
-        fill!(inflow_array, floor(Int, PSY.get_inflow(g_s)))
+        fill!(
+            charge_cap_array,
+            floor(Int, PSY.get_inflow(turbine_to_reservoir_mapping[g_s])),
+        )
+        fill!(discharge_cap_array, floor(Int, PSY.get_max_active_power(g_s)))
+        fill!(
+            energy_cap_array,
+            floor(Int, PSY.get_storage_level_limits(turbine_to_reservoir_mapping[g_s]).max),
+        )
+        fill!(inflow_array, floor(Int, PSY.get_inflow(turbine_to_reservoir_mapping[g_s])))
         fill!(gridinj_cap_array, floor(Int, PSY.get_max_active_power(g_s)))
     end
 end
@@ -554,7 +603,8 @@ Apply GeneratorStoragePRAS to create PRAS matrices for generator storage
 function process_genstorage(
     gen_stor::Array{PSY.Device},
     s2p_meta::S2P_metadata,
-    component_to_formulation::Dict{PSY.Device, GeneratorStoragePRAS},
+    component_to_formulation::Dict{PSY.Device, GeneratorStoragePRAS};
+    turbine_to_reservoir_mapping::Union{Nothing, Dict{PSY.HydroUnit, PSY.HydroReservoir}}=nothing,
 )
     gen_stor_names, gen_stor_categories = if (length(gen_stor) == 0)
         String[], String[]
@@ -569,6 +619,7 @@ function process_genstorage(
     gen_stor_enrgy_cap_array = Matrix{Int64}(undef, n_genstors, s2p_meta.N)
     gen_stor_inflow_array = Matrix{Int64}(undef, n_genstors, s2p_meta.N)
     gen_stor_gridinj_cap_array = Matrix{Int64}(undef, n_genstors, s2p_meta.N)
+    gen_stor_gridwdr_cap_array = Matrix{Int64}(undef, n_genstors, s2p_meta.N)
 
     λ_genstors = Matrix{Float64}(undef, n_genstors, s2p_meta.N)
     μ_genstors = Matrix{Float64}(undef, n_genstors, s2p_meta.N)
@@ -578,11 +629,13 @@ function process_genstorage(
             component_to_formulation[g_s],
             g_s,
             s2p_meta,
+            turbine_to_reservoir_mapping,
             view(gen_stor_charge_cap_array, idx, :),
             view(gen_stor_discharge_cap_array, idx, :),
             view(gen_stor_inflow_array, idx, :),
             view(gen_stor_enrgy_cap_array, idx, :),
             view(gen_stor_gridinj_cap_array, idx, :),
+            view(gen_stor_gridwdr_cap_array, idx, :),
         )
 
         λ_genstors[idx, :], μ_genstors[idx, :] = get_outage_time_series_data(
@@ -592,7 +645,7 @@ function process_genstorage(
         )
     end
 
-    gen_stor_gridwdr_cap_array = zeros(Int64, n_genstors, s2p_meta.N) # Not currently available/ defined in PowerSystems
+    # Not currently available/ defined in PowerSystems
     gen_stor_charge_eff = ones(n_genstors, s2p_meta.N)                # Not currently available/ defined in PowerSystems
     gen_stor_discharge_eff = ones(n_genstors, s2p_meta.N)             # Not currently available/ defined in PowerSystems
     gen_stor_cryovr_eff = ones(n_genstors, s2p_meta.N)                # Not currently available/ defined in PowerSystems
@@ -886,7 +939,14 @@ function generate_pras_system(
         build_component_to_formulation(GeneratorStoragePRAS, sys, template.device_models)
     gen_stors, region_genstor_idxs =
         get_gen_storage_region_indices(sys, regions, gen_stors_to_formula)
-    new_gen_stors = process_genstorage(gen_stors, s2p_meta, gen_stors_to_formula)
+    # Turbine to Reservoir Mapping
+    turbine_to_reservoir_mapping = get_turbine_to_reservoir_mapping(sys)
+    new_gen_stors = process_genstorage(
+        gen_stors,
+        s2p_meta,
+        gen_stors_to_formula,
+        turbine_to_reservoir_mapping=turbine_to_reservoir_mapping,
+    )
 
     #######################################################
     # Network
@@ -979,9 +1039,9 @@ const DEFAULT_DEVICE_MODELS = [
     DeviceRAModel(PSY.ThermalGen, GeneratorPRAS),
     DeviceRAModel(PSY.RenewableGen, GeneratorPRAS),
     DeviceRAModel(PSY.HydroDispatch, GeneratorPRAS),
-    DeviceRAModel(PSY.HydroTurbine, GeneratorPRAS),
     DeviceRAModel(PSY.EnergyReservoirStorage, EnergyReservoirSoC),
     DeviceRAModel(PSY.HybridSystem, HybridSystemPRAS),
+    DeviceRAModel(PSY.HydroTurbine, HydroEnergyReservoirPRAS),
     DeviceRAModel(PSY.HydroPumpTurbine, HydroEnergyReservoirPRAS),
 ]
 
@@ -993,9 +1053,9 @@ const _LUMPED_RENEWABLE_DEVICE_MODELS = [
     DeviceRAModel(PSY.ThermalGen, GeneratorPRAS),
     DeviceRAModel(PSY.RenewableGen, GeneratorPRAS, lump_renewable_generation=true),
     DeviceRAModel(PSY.HydroDispatch, GeneratorPRAS),
-    DeviceRAModel(PSY.HydroTurbine, GeneratorPRAS),
     DeviceRAModel(PSY.EnergyReservoirStorage, EnergyReservoirSoC),
     DeviceRAModel(PSY.HybridSystem, HybridSystemPRAS),
+    DeviceRAModel(PSY.HydroTurbine, HydroEnergyReservoirPRAS),
     DeviceRAModel(PSY.HydroPumpTurbine, HydroEnergyReservoirPRAS),
 ]
 

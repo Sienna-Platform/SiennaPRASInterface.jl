@@ -56,8 +56,16 @@ function get_generator_category(gen::GEN) where {GEN <: PSY.ThermalGen}
     return string(PSY.get_fuel(gen))
 end
 
-function get_generator_category(gen::GEN) where {GEN <: PSY.HydroGen}
+function get_generator_category(gen::PSY.HydroDispatch)
     return "Hydro"
+end
+
+function get_generator_category(gen::PSY.HydroTurbine)
+    return "HydroReservoir"
+end
+
+function get_generator_category(gen::PSY.HydroPumpTurbine)
+    return "PumpedStorage"
 end
 
 function get_generator_category(stor::GEN) where {GEN <: PSY.Storage}
@@ -184,4 +192,17 @@ function get_outage_time_series_data(
             return zeros(Float64, s2p_meta.N), ones(Float64, s2p_meta.N)
         end
     end
+end
+
+function get_turbine_to_reservoir_mapping(sys::PSY.System)
+    turbine_to_reservoir_mapping = Dict{PSY.HydroUnit, PSY.HydroReservoir}()
+    for res in PSY.get_available_components(PSY.HydroReservoir, sys)
+        if iszero(length(res.downstream_turbines))
+            continue
+        end
+        for tur in res.downstream_turbines
+            push!(turbine_to_reservoir_mapping, tur => res)
+        end
+    end
+    return turbine_to_reservoir_mapping
 end

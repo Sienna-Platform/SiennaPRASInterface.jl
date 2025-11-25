@@ -339,6 +339,7 @@ function process_generators(
         λ_gen[idx, :], μ_gen[idx, :] = get_outage_time_series_data(
             g,
             s2p_meta,
+            haskey(lumped_mapping, g.name) ? false :
             get_add_default_transition_probabilities(component_to_formulation[g]),
         )
     end
@@ -592,6 +593,12 @@ function assign_to_gen_stor_matrices!(
         )
         fill!(inflow_array, floor(Int, PSY.get_inflow(turbine_to_reservoir_mapping[g_s])))
         fill!(gridinj_cap_array, floor(Int, PSY.get_max_active_power(g_s)))
+    end
+    if (g_s isa PSY.HydroPumpTurbine)
+        gridwdr_cap_array =
+            fill!(gridwdr_cap_array, floor(Int, PSY.get_active_power_limits_pump(g_s).max))
+    else
+        gridwdr_cap_array = zeros(Int64, s2p_meta.N)
     end
 end
 

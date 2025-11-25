@@ -17,6 +17,11 @@ const PSCB = PowerSystemCaseBuilder
 #include("rts_gmlc.jl")
 include("comparison_utils.jl")
 
+# Need to define this before PSCB changes are merged
+function PSY.get_storage_capacity(res::PSY.HydroReservoir)
+    return PSY.get_storage_level_limits(res).max
+end
+
 @testset "Aqua.jl" begin
     Aqua.test_unbound_args(SiennaPRASInterface)
     Aqua.test_undefined_exports(SiennaPRASInterface)

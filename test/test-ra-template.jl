@@ -19,7 +19,7 @@ keys_to_names(
         PSY.get_name.(
             PSY.get_components(
                 PSY.get_available,
-                Union{PSY.HydroTurbine, PSY.HybridSystem},
+                Union{PSY.HydroUnit, PSY.HybridSystem},
                 rts_da_sys,
             )
         )
@@ -49,6 +49,10 @@ keys_to_names(
             ),
             SiennaPRASInterface.DeviceRAModel(
                 PSY.HydroTurbine,
+                SiennaPRASInterface.HydroEnergyReservoirPRAS(),
+            ),
+            SiennaPRASInterface.DeviceRAModel(
+                PSY.HydroPumpTurbine,
                 SiennaPRASInterface.HydroEnergyReservoirPRAS(),
             ),
         ],

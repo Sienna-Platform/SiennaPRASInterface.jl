@@ -1,6 +1,7 @@
 @testset "RTS GMLC DA Error" begin
     rts_da_sys =
         PSCB.build_system(PSCB.SPISystems, "RTS_GMLC_Hourly with Static Outage Data")
+    PSY.remove_time_series!(rts_da_sys, PSY.DeterministicSingleTimeSeries)
     PSY.remove_time_series!(rts_da_sys, PSY.SingleTimeSeries)
     @test_throws "System doesn't have any StaticTimeSeries." rts_pras_sys =
         generate_pras_system(rts_da_sys, PSY.Area)
@@ -23,7 +24,7 @@ end
         PSY.get_name.(
             PSY.get_components(
                 x -> PSY.get_available(x) && PSY.get_rating(x) > 0,
-                Union{PSY.HydroEnergyReservoir, PSY.HybridSystem},
+                Union{PSY.HydroUnit, PSY.HybridSystem},
                 rts_da_sys,
             )
         )
@@ -93,10 +94,6 @@ end
         @test rts_pras_sys isa SiennaPRASInterface.PRASCore.SystemModel
         @test test_names_equal(rts_pras_sys.regions.names, area_names)
 
-        rts_pras_sys = generate_pras_system(rts_da_sys, PSY.Area, true)
-        @test rts_pras_sys isa SiennaPRASInterface.PRASCore.SystemModel
-        @test test_names_equal(rts_pras_sys.regions.names, area_names)
-
         rts_pras_sys =
             generate_pras_system(rts_da_sys, PSY.Area, true, joinpath(@__DIR__, "rts.pras"))
         @test rts_pras_sys isa SiennaPRASInterface.PRASCore.SystemModel
@@ -104,6 +101,7 @@ end
         @test isfile(joinpath(@__DIR__, "rts.pras"))
         rts_pras_sys2 =
             SiennaPRASInterface.PRASCore.SystemModel(joinpath(@__DIR__, "rts.pras"))
+        @test rts_pras_sys2 isa SiennaPRASInterface.PRASCore.SystemModel
     end
 end
 
@@ -125,7 +123,7 @@ end
         PSY.get_name.(
             PSY.get_components(
                 x -> PSY.get_available(x) && PSY.get_rating(x) > 0,
-                Union{PSY.HydroEnergyReservoir, PSY.HybridSystem},
+                Union{PSY.HydroUnit, PSY.HybridSystem},
                 rts_da_sys,
             )
         )
@@ -137,12 +135,13 @@ end
                 PSY.get_area(PSY.get_from_bus(c)) != PSY.get_area(PSY.get_to_bus(c))
             end
         )
+    PSY.remove_time_series!(rts_da_sys, PSY.DeterministicSingleTimeSeries)
     for (type, names) in zip(
         [
             PSY.StaticLoad,  # Bajer has two ElectricLoads
             PSY.Generator,
             PSY.Storage,
-            Union{PSY.HydroEnergyReservoir, PSY.HybridSystem},
+            Union{PSY.HydroUnit, PSY.HybridSystem},
         ],
         [load_names, generator_names, storage_names, generatorstorage_names],
     )
@@ -171,7 +170,7 @@ end
                 SiennaPRASInterface.LinePRAS(),
             ),
             SiennaPRASInterface.DeviceRAModel(
-                PSY.TwoTerminalHVDCLine,
+                PSY.TwoTerminalGenericHVDCLine,
                 SiennaPRASInterface.LinePRAS(),
             ),
             SiennaPRASInterface.DeviceRAModel(
@@ -192,10 +191,16 @@ end
             ),
             SiennaPRASInterface.DeviceRAModel(
                 PSY.EnergyReservoirStorage,
-                SiennaPRASInterface.EnergyReservoirLossless(),
+                SiennaPRASInterface.EnergyReservoirSoC(),
             ),
             SiennaPRASInterface.DeviceRAModel(
-                PSY.HydroEnergyReservoir,
+                PSY.HydroTurbine,
+                SiennaPRASInterface.HydroEnergyReservoirPRAS(
+                    max_active_power="max_active_POWER",
+                ),
+            ),
+            SiennaPRASInterface.DeviceRAModel(
+                PSY.HydroPumpTurbine,
                 SiennaPRASInterface.HydroEnergyReservoirPRAS(
                     max_active_power="max_active_POWER",
                 ),

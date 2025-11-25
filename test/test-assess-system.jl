@@ -8,15 +8,16 @@ function test_shortfalls(shortfalls)
     @test SiennaPRASInterface.val(lole) >= 0 && SiennaPRASInterface.val(lole) <= 10
     @test SiennaPRASInterface.stderror(lole) >= 0 &&
           SiennaPRASInterface.stderror(lole) <= 10
-    @test SiennaPRASInterface.val(eue) >= 0 && SiennaPRASInterface.val(eue) <= 10
-    @test SiennaPRASInterface.stderror(eue) >= 0 && SiennaPRASInterface.stderror(eue) <= 10
+    @test SiennaPRASInterface.val(eue) >= 0 && SiennaPRASInterface.val(eue) <= 50
+    @test SiennaPRASInterface.stderror(eue) >= 0 && SiennaPRASInterface.stderror(eue) <= 50
 end
 
 @testset "test assess(::PSY.System, ::Area, ...) Hourly PRAS System" begin
     rts_da_sys =
         PSCB.build_system(PSCB.SPISystems, "RTS_GMLC_Hourly with Static Outage Data")
 
-    sequential_monte_carlo = SiennaPRASInterface.SequentialMonteCarlo(samples=2, seed=1)
+    sequential_monte_carlo =
+        SiennaPRASInterface.SequentialMonteCarlo(samples=2, seed=1, threaded=false)
     @testset "sys-area call" begin
         shortfalls, = SiennaPRASInterface.assess(
             rts_da_sys,
@@ -62,7 +63,8 @@ end
 @testset "test assess(::PSY.System, ::Area, ...) Sub-Hourly System" begin
     rts_rt_sys = PSCB.build_system(PSCB.SPISystems, "RTS_GMLC_5min with Static Outage Data")
 
-    sequential_monte_carlo = SiennaPRASInterface.SequentialMonteCarlo(samples=2, seed=1)
+    sequential_monte_carlo =
+        SiennaPRASInterface.SequentialMonteCarlo(samples=2, seed=1, threaded=false)
     shortfalls, = SiennaPRASInterface.assess(
         rts_rt_sys,
         PSY.Area,

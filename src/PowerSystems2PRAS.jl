@@ -594,11 +594,11 @@ function assign_to_gen_stor_matrices!(
         fill!(inflow_array, floor(Int, PSY.get_inflow(turbine_to_reservoir_mapping[g_s])))
         fill!(gridinj_cap_array, floor(Int, PSY.get_max_active_power(g_s)))
     end
-    if (g_s isa PSY.HydroPumpTurbine)
+    if (isa(g_s, PSY.HydroPumpTurbine))
         gridwdr_cap_array =
             fill!(gridwdr_cap_array, floor(Int, PSY.get_active_power_limits_pump(g_s).max))
     else
-        gridwdr_cap_array = zeros(Int64, s2p_meta.N)
+        gridwdr_cap_array .= zeros(Int64, s2p_meta.N)
     end
 end
 

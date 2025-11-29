@@ -152,14 +152,28 @@ function line_type(line::PSY.TwoTerminalVSCLine)
 end
 
 function get_outage_time_series_data(
-    gen::Union{PSY.StaticInjection, PSY.Branch},
+    gen::PSY.StaticInjection,
     s2p_meta::S2P_metadata,
-    add_default_for::Bool=false,
+    formulation::AbstractRAFormulation,
+)
+    return get_outage_time_series_data(
+        gen,
+        s2p_meta,
+        outage_probability_ts_name=get_outage_probability(formulation),
+        recovery_probability_ts_name=get_recovery_probability(formulation),
+    )
+end
+
+function get_outage_time_series_data(
+    gen::Union{PSY.StaticInjection, PSY.Branch},
+    s2p_meta::S2P_metadata;
+    outage_probability_ts_name="outage_probability",
+    recovery_probability_ts_name="recovery_probability",
 )
     # Get GeometricForcedOutage SupplementalAttribute of the generator g
     outage_sup_attrs =
         PSY.get_supplemental_attributes(PSY.GeometricDistributionForcedOutage, gen)
-    if (length(outage_sup_attrs) > 0)
+    if !(isempty(outage_sup_attrs))
         transition_data = first(outage_sup_attrs)
         λ = PSY.get_outage_transition_probability(transition_data)
         μ = if (iszero(PSY.get_mean_time_to_recovery(transition_data)))
@@ -168,29 +182,34 @@ function get_outage_time_series_data(
             1 / PSY.get_mean_time_to_recovery(transition_data)
         end
 
-        if (PSY.has_time_series(transition_data, PSY.SingleTimeSeries))
+        if (
+            PSY.has_time_series(
+                transition_data,
+                PSY.SingleTimeSeries,
+                outage_probability_ts_name,
+            ) && PSY.has_time_series(
+                transition_data,
+                PSY.SingleTimeSeries,
+                recovery_probability_ts_name,
+            )
+        )
             return PSY.get_time_series_values(
                 PSY.SingleTimeSeries,
                 transition_data,
-                "outage_probability",
+                outage_probability_ts_name,
             ),
             PSY.get_time_series_values(
                 PSY.SingleTimeSeries,
                 transition_data,
-                "recovery_probability",
+                recovery_probability_ts_name,
             )
         else
+            @warn "GeometricForcedOutage SupplementalAttribute for $(PSY.get_name(gen)) of $(typeof(gen)) does not have time series data for outage and recovery probabilities with time series names ($outage_probability_ts_name, $recovery_probability_ts_name). Using constant values for this component."
             return fill(λ, s2p_meta.N), fill(μ, s2p_meta.N)
         end
     else
-        if (add_default_for)
-            @warn "Adding default transition probabilities for $(PSY.get_name(gen)) of $(typeof(gen))."
-            (λ, μ) = rate_to_probability(0.05, 24)
-            return fill(λ, s2p_meta.N), fill(μ, s2p_meta.N)
-        else
-            @warn "No GeometricForcedOutage SupplementalAttribute available for $(PSY.get_name(gen)) of $(typeof(gen)). Using nominal outage and recovery probabilities for this component."
-            return zeros(Float64, s2p_meta.N), ones(Float64, s2p_meta.N)
-        end
+        @warn "No GeometricForcedOutage SupplementalAttribute available for $(PSY.get_name(gen)) of $(typeof(gen)). Using nominal outage and recovery probabilities for this component."
+        return zeros(Float64, s2p_meta.N), ones(Float64, s2p_meta.N)
     end
 end
 

@@ -336,12 +336,11 @@ function process_generators(
             end
         end
 
-        λ_gen[idx, :], μ_gen[idx, :] = get_outage_time_series_data(
-            g,
-            s2p_meta,
-            haskey(lumped_mapping, g.name) ? false :
-            get_add_default_transition_probabilities(component_to_formulation[g]),
-        )
+        λ_gen[idx, :], μ_gen[idx, :] = if haskey(lumped_mapping, g.name)
+            get_outage_time_series_data(g, s2p_meta)
+        else
+            get_outage_time_series_data(g, s2p_meta, component_to_formulation[g])
+        end
     end
 
     return PRASCore.Generators{
@@ -416,11 +415,8 @@ function process_storage(
             view(stor_dischrg_eff_array, idx, :),
         )
 
-        λ_stor[idx, :], μ_stor[idx, :] = get_outage_time_series_data(
-            s,
-            s2p_meta,
-            get_add_default_transition_probabilities(component_to_formulation[s]),
-        )
+        λ_stor[idx, :], μ_stor[idx, :] =
+            get_outage_time_series_data(s, s2p_meta, component_to_formulation[s])
     end
 
     stor_cryovr_eff = ones(n_stor, s2p_meta.N)   # Not currently available/ defined in PowerSystems
@@ -644,11 +640,8 @@ function process_genstorage(
             view(gen_stor_gridwdr_cap_array, idx, :),
         )
 
-        λ_genstors[idx, :], μ_genstors[idx, :] = get_outage_time_series_data(
-            g_s,
-            s2p_meta,
-            get_add_default_transition_probabilities(component_to_formulation[g_s]),
-        )
+        λ_genstors[idx, :], μ_genstors[idx, :] =
+            get_outage_time_series_data(g_s, s2p_meta, component_to_formulation[g_s])
     end
 
     # Not currently available/ defined in PowerSystems
@@ -935,8 +928,7 @@ function generate_pras_system(
     for g in gens
         haskey(lumped_mapping, g.name) && continue
         if (
-            get_add_default_transition_probabilities(component_to_formulation[g]) &&
-            isempty(
+            get_add_default_transition_probabilities(gens_to_formula[g]) && isempty(
                 PSY.get_supplemental_attributes(PSY.GeometricDistributionForcedOutage, g),
             )
         )
@@ -956,8 +948,7 @@ function generate_pras_system(
     # Add SupplementalAttribute if get_add_default_transition_probabilities is true
     for s in stors
         if (
-            get_add_default_transition_probabilities(component_to_formulation[s]) &&
-            isempty(
+            get_add_default_transition_probabilities(stors_to_formula[s]) && isempty(
                 PSY.get_supplemental_attributes(PSY.GeometricDistributionForcedOutage, s),
             )
         )
@@ -977,8 +968,7 @@ function generate_pras_system(
     # Add SupplementalAttribute if get_add_default_transition_probabilities is true
     for g_s in gen_stors
         if (
-            get_add_default_transition_probabilities(component_to_formulation[g_s]) &&
-            isempty(
+            get_add_default_transition_probabilities(gen_stors_to_formula[g_s]) && isempty(
                 PSY.get_supplemental_attributes(PSY.GeometricDistributionForcedOutage, g_s),
             )
         )

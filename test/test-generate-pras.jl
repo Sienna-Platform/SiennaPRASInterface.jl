@@ -287,6 +287,65 @@ end
     @test array_all_equal(rts_pras_sys.generators.μ[idx, :], μ)
 end
 
+@testset "RTS GMLC DA with default transition probabilities" begin
+    rts_da_sys =
+        PSCB.build_system(PSCB.SPISystems, "RTS_GMLC_Hourly with Static Outage Data")
+
+    # Remove GeometricDistributionForcedOutage SupplementalAttribute from 322_CT_6 generator
+    thermal_component = PSY.get_component(PSY.ThermalStandard, rts_da_sys, "322_CT_6")
+    supp_attr = first(
+        PSY.get_supplemental_attributes(
+            PSY.GeometricDistributionForcedOutage,
+            thermal_component,
+        ),
+    )
+    PSY.remove_supplemental_attribute!(rts_da_sys, thermal_component, supp_attr)
+
+    # Remove GeometricDistributionForcedOutage SupplementalAttribute from 215_HYDRO_3 generator
+    genstor_comp = PSY.get_component(PSY.HydroTurbine, rts_da_sys, "215_HYDRO_3")
+    supp_attr = first(
+        PSY.get_supplemental_attributes(
+            PSY.GeometricDistributionForcedOutage,
+            genstor_comp,
+        ),
+    )
+    PSY.remove_supplemental_attribute!(rts_da_sys, genstor_comp, supp_attr)
+    template = SiennaPRASInterface.RATemplate(
+        PSY.Area,
+        [
+            DeviceRAModel(PSY.StaticLoad, StaticLoadPRAS),
+            DeviceRAModel(
+                PSY.ThermalGen,
+                GeneratorPRAS(add_default_transition_probabilities=true),
+            ),
+            DeviceRAModel(
+                PSY.EnergyReservoirStorage,
+                EnergyReservoirSoC(add_default_transition_probabilities=true),
+            ),
+            DeviceRAModel(
+                PSY.HydroTurbine,
+                HydroEnergyReservoirPRAS(add_default_transition_probabilities=true),
+            ),
+        ],
+    )
+
+    rts_pras_sys = generate_pras_system(rts_da_sys, template)
+    @test rts_pras_sys isa SiennaPRASInterface.PRASCore.SystemModel
+    idx = findfirst(x -> x == "322_CT_6", rts_pras_sys.generators.names)
+    λ, μ = SiennaPRASInterface.rate_to_probability(0.05, 24)
+    @test array_all_equal(rts_pras_sys.generators.λ[idx, :], λ)
+    @test array_all_equal(rts_pras_sys.generators.μ[idx, :], μ)
+
+    stor_comp = first(PSY.get_components(PSY.EnergyReservoirStorage, rts_da_sys))
+    idx = findfirst(x -> x == stor_comp.name, rts_pras_sys.storages.names)
+    @test array_all_equal(rts_pras_sys.storages.λ[idx, :], λ)
+    @test array_all_equal(rts_pras_sys.storages.μ[idx, :], μ)
+
+    idx = findfirst(x -> x == "215_HYDRO_3", rts_pras_sys.generatorstorages.names)
+    @test array_all_equal(rts_pras_sys.generatorstorages.λ[idx, :], λ)
+    @test array_all_equal(rts_pras_sys.generatorstorages.μ[idx, :], μ)
+end
+
 @testset "RTS GMLC RT with default data" begin
     rts_rt_sys = PSCB.build_system(PSCB.PSISystems, "RTS_GMLC_RT_sys")
 

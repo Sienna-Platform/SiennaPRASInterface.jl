@@ -229,9 +229,21 @@ EnergyReservoirSoC is a storage formulation that keeps track oh state of charge.
 struct EnergyReservoirSoC <: StoragePRAS
     "Whether to add default outage data"
     add_default_transition_probabilities::Bool
+    "Name of time series to use for outage_probability"
+    outage_probability::String
+    "Name of time series to use for recovery_probability"
+    recovery_probability::String
 
-    function EnergyReservoirSoC(; add_default_transition_probabilities=false)
-        return new(add_default_transition_probabilities)
+    function EnergyReservoirSoC(;
+        add_default_transition_probabilities=false,
+        outage_probability="outage_probability",
+        recovery_probability="recovery_probability",
+    )
+        return new(
+            add_default_transition_probabilities,
+            outage_probability,
+            recovery_probability,
+        )
     end
 end
 
@@ -240,6 +252,20 @@ Get whether default forced outages needed to be added to generatorstorages
 """
 function get_add_default_transition_probabilities(f::StoragePRAS)
     return f.add_default_transition_probabilities
+end
+
+"""
+Get outage_probability time series name
+"""
+function get_outage_probability(f::StoragePRAS)
+    return f.outage_probability
+end
+
+"""
+Get recovery_probability time series name
+"""
+function get_recovery_probability(f::StoragePRAS)
+    return f.recovery_probability
 end
 
 """

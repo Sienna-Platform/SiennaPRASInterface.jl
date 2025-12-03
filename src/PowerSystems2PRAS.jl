@@ -336,12 +336,11 @@ function process_generators(
             end
         end
 
-        λ_gen[idx, :], μ_gen[idx, :] = get_outage_time_series_data(
-            g,
-            s2p_meta,
-            haskey(lumped_mapping, g.name) ? false :
-            get_add_default_transition_probabilities(component_to_formulation[g]),
-        )
+        λ_gen[idx, :], μ_gen[idx, :] = if haskey(lumped_mapping, g.name)
+            get_outage_time_series_data(g, s2p_meta)
+        else
+            get_outage_time_series_data(g, s2p_meta, component_to_formulation[g])
+        end
     end
 
     return PRASCore.Generators{
@@ -416,11 +415,8 @@ function process_storage(
             view(stor_dischrg_eff_array, idx, :),
         )
 
-        λ_stor[idx, :], μ_stor[idx, :] = get_outage_time_series_data(
-            s,
-            s2p_meta,
-            get_add_default_transition_probabilities(component_to_formulation[s]),
-        )
+        λ_stor[idx, :], μ_stor[idx, :] =
+            get_outage_time_series_data(s, s2p_meta, component_to_formulation[s])
     end
 
     stor_cryovr_eff = ones(n_stor, s2p_meta.N)   # Not currently available/ defined in PowerSystems
@@ -595,8 +591,7 @@ function assign_to_gen_stor_matrices!(
         fill!(gridinj_cap_array, floor(Int, PSY.get_max_active_power(g_s)))
     end
     if (isa(g_s, PSY.HydroPumpTurbine))
-        gridwdr_cap_array =
-            fill!(gridwdr_cap_array, floor(Int, PSY.get_active_power_limits_pump(g_s).max))
+        fill!(gridwdr_cap_array, floor(Int, PSY.get_active_power_limits_pump(g_s).max))
     else
         gridwdr_cap_array .= zeros(Int64, s2p_meta.N)
     end
@@ -645,11 +640,8 @@ function process_genstorage(
             view(gen_stor_gridwdr_cap_array, idx, :),
         )
 
-        λ_genstors[idx, :], μ_genstors[idx, :] = get_outage_time_series_data(
-            g_s,
-            s2p_meta,
-            get_add_default_transition_probabilities(component_to_formulation[g_s]),
-        )
+        λ_genstors[idx, :], μ_genstors[idx, :] =
+            get_outage_time_series_data(g_s, s2p_meta, component_to_formulation[g_s])
     end
 
     # Not currently available/ defined in PowerSystems
@@ -867,7 +859,7 @@ function generate_pras_system(
     outages = PSY.get_supplemental_attributes(PSY.GeometricDistributionForcedOutage, sys)
 
     # If no GeometricDistributionForcedOutage objects exist, add them to relevant components in the System
-    if (outages.length == 0)
+    if isempty(outages)
         add_default_data!(sys)
     end
     #######################################################
@@ -930,6 +922,20 @@ function generate_pras_system(
         build_component_to_formulation(GeneratorPRAS, sys, template.device_models)
     gens, region_gen_idxs, lumped_mapping =
         get_generator_region_indices(sys, s2p_meta, regions, gens_to_formula)
+
+    # Add SupplementalAttribute if get_add_default_transition_probabilities is true
+    # Ignoring lumped generators here because they don't need the attribute added
+    for g in gens
+        haskey(lumped_mapping, g.name) && continue
+        if (
+            get_add_default_transition_probabilities(gens_to_formula[g]) && isempty(
+                PSY.get_supplemental_attributes(PSY.GeometricDistributionForcedOutage, g),
+            )
+        )
+            PSY.add_supplemental_attribute!(sys, g, DEFAULT_OUTAGE_DATA_SUPP_ATTR)
+        end
+    end
+
     new_generators = process_generators(gens, s2p_meta, gens_to_formula, lumped_mapping)
 
     # **TODO Future : time series for storage devices
@@ -938,6 +944,18 @@ function generate_pras_system(
         build_component_to_formulation(StoragePRAS, sys, template.device_models)
     stors, region_stor_idxs =
         get_storage_region_indices(sys, s2p_meta, regions, stors_to_formula)
+
+    # Add SupplementalAttribute if get_add_default_transition_probabilities is true
+    for s in stors
+        if (
+            get_add_default_transition_probabilities(stors_to_formula[s]) && isempty(
+                PSY.get_supplemental_attributes(PSY.GeometricDistributionForcedOutage, s),
+            )
+        )
+            PSY.add_supplemental_attribute!(sys, s, DEFAULT_OUTAGE_DATA_SUPP_ATTR)
+        end
+    end
+
     new_storage = process_storage(stors, s2p_meta, stors_to_formula)
 
     # **TODO Consider all combinations of HybridSystem (Currently only works for DER+ESS)
@@ -946,7 +964,19 @@ function generate_pras_system(
         build_component_to_formulation(GeneratorStoragePRAS, sys, template.device_models)
     gen_stors, region_genstor_idxs =
         get_gen_storage_region_indices(sys, regions, gen_stors_to_formula)
-    # Check if HydroEnergyReservoir formulation is being used
+    
+    ##TODO Check if HydroEnergyReservoir formulation is being used
+
+    # Add SupplementalAttribute if get_add_default_transition_probabilities is true
+    for g_s in gen_stors
+        if (
+            get_add_default_transition_probabilities(gen_stors_to_formula[g_s]) && isempty(
+                PSY.get_supplemental_attributes(PSY.GeometricDistributionForcedOutage, g_s),
+            )
+        )
+            PSY.add_supplemental_attribute!(sys, g_s, DEFAULT_OUTAGE_DATA_SUPP_ATTR)
+        end
+    end
 
     # Turbine to Reservoir Mapping
     turbine_to_reservoir_mapping = get_turbine_to_reservoir_mapping(sys)

@@ -946,6 +946,8 @@ function generate_pras_system(
         build_component_to_formulation(GeneratorStoragePRAS, sys, template.device_models)
     gen_stors, region_genstor_idxs =
         get_gen_storage_region_indices(sys, regions, gen_stors_to_formula)
+    # Check if HydroEnergyReservoir formulation is being used
+
     # Turbine to Reservoir Mapping
     turbine_to_reservoir_mapping = get_turbine_to_reservoir_mapping(sys)
     new_gen_stors = process_genstorage(

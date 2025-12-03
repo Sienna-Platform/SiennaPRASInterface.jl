@@ -113,18 +113,22 @@ struct HydroEnergyReservoirPRAS <: GeneratorStoragePRAS
     storage_capacity::String
     "Whether to add default outage data"
     add_default_transition_probabilities::Bool
+    "Whether to retrieve hydro thermal planning data"
+    add_hydro_thermal_coordination::Bool    
 
     function HydroEnergyReservoirPRAS(;
         max_active_power="max_active_power",
         inflow="inflow",
         storage_capacity="storage_capacity",
         add_default_transition_probabilities=false,
+        add_hydro_thermal_coordination=false,
     )
         return new(
             max_active_power,
             inflow,
             storage_capacity,
             add_default_transition_probabilities,
+            add_hydro_thermal_coordination
         )
     end
 end
@@ -155,6 +159,13 @@ Get storage capacity time series name
 """
 function get_storage_capacity(f::HydroEnergyReservoirPRAS)
     return f.storage_capacity
+end
+
+"""
+Get whether to retrieve Hydrothermalplanning data
+"""
+function add_hydro_thermal_coordination(f::GeneratorPRAS)
+    return f.add_hydro_thermal_coordination
 end
 
 """

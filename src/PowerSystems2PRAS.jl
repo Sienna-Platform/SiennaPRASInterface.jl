@@ -153,6 +153,8 @@ function get_generator_region_indices(
             ),
             collect(keys(nonlumped_gens_to_formula)),
         )
+        # To ensure reproducability when testing
+        sort!(gs, by=g -> g.name)
         push!(gens, gs)
         push!(reg_wind_gens, wind_gs)
         push!(reg_pv_gens, pv_gs)
@@ -220,15 +222,15 @@ function get_storage_region_indices(
     for (idx, region) in enumerate(regions)
         reg_stor_comps =
             get_available_components_in_aggregation_topology(PSY.Storage, sys, region)
-        push!(
-            stors,
-            filter(
-                x ->
-                    haskey(component_to_formulation, x) &&
-                        PSY.IS.get_uuid(x) ∉ s2p_meta.hs_uuids,
-                reg_stor_comps,
-            ),
+        stor = filter(
+            x ->
+                haskey(component_to_formulation, x) &&
+                    PSY.IS.get_uuid(x) ∉ s2p_meta.hs_uuids,
+            reg_stor_comps,
         )
+        # To ensure reproducability when testing
+        sort!(stor, by=s -> s.name)
+        push!(stors, stor)
         idx == 1 ? start_id[idx] = 1 :
         start_id[idx] = start_id[idx - 1] + length(stors[idx - 1])
         region_stor_idxs[idx] = range(start_id[idx], length=length(stors[idx]))
@@ -254,6 +256,8 @@ function get_gen_storage_region_indices(
         reg_gen_stor_comps =
             get_available_components_in_aggregation_topology(PSY.Generator, sys, region)
         gs = filter(x -> haskey(component_to_formulation, x), reg_gen_stor_comps)
+        # To ensure reproducability when testing
+        sort!(gs, by=g -> g.name)
         push!(gen_stors, gs)
         idx == 1 ? start_id[idx] = 1 :
         start_id[idx] = start_id[idx - 1] + length(gen_stors[idx - 1])
@@ -1003,6 +1007,8 @@ function generate_pras_system(
                 keys(lines_to_formulation),
             ),
         )
+        # To ensure reproducability when testing
+        sort!(lines, by=l -> l.name)
         # Sorting here let's us better control the interface/line link
         sorted_lines, interface_reg_idxs, interface_line_idxs =
             get_sorted_lines(lines, PSY.get_name.(regions))

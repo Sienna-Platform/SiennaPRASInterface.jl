@@ -16,7 +16,7 @@ PRAS formulation subtypes for specific PRAS types
 abstract type AbstractRAFormulation end
 
 """
-    GeneratorPRAS(; max_active_power, lump_renewable_generation) <: AbstractRAFormulation
+    GeneratorPRAS(; max_active_power, lump_renewable_generation, add_default_transition_probabilities, outage_probability, recovery_probability) <: AbstractRAFormulation
 
 # Arguments
 $(TYPEDFIELDS)
@@ -28,12 +28,27 @@ struct GeneratorPRAS <: AbstractRAFormulation
     max_active_power::String
     "Whether to lump renewable generation to regions"
     lump_renewable_generation::Bool
+    "Whether to add default outage data to generators"
+    add_default_transition_probabilities::Bool
+    "Name of time series to use for outage_probability"
+    outage_probability::String
+    "Name of time series to use for recovery_probability"
+    recovery_probability::String
 
     function GeneratorPRAS(;
         max_active_power="max_active_power",
         lump_renewable_generation=false,
+        add_default_transition_probabilities=false,
+        outage_probability="outage_probability",
+        recovery_probability="recovery_probability",
     )
-        return new(max_active_power, lump_renewable_generation)
+        return new(
+            max_active_power,
+            lump_renewable_generation,
+            add_default_transition_probabilities,
+            outage_probability,
+            recovery_probability,
+        )
     end
 end
 
@@ -52,6 +67,27 @@ function get_lump_renewable_generation(f::GeneratorPRAS)
 end
 
 """
+Get whether default forced outages needed to be added to generators
+"""
+function get_add_default_transition_probabilities(f::GeneratorPRAS)
+    return f.add_default_transition_probabilities
+end
+
+"""
+Get outage_probability time series name
+"""
+function get_outage_probability(f::GeneratorPRAS)
+    return f.outage_probability
+end
+
+"""
+Get recovery_probability time series name
+"""
+function get_recovery_probability(f::GeneratorPRAS)
+    return f.recovery_probability
+end
+
+"""
     GeneratorStoragePRAS <: AbstractRAFormulation
 
 Objects in Sienna that behave like generator and storage are mapped to generatorstorage in PRAS.
@@ -62,9 +98,8 @@ To add a generator storage formulation, you must also add a [`assign_to_gen_stor
   - [`HydroEnergyReservoirPRAS`](@ref)
 """
 abstract type GeneratorStoragePRAS <: AbstractRAFormulation end
-
 """
-    HybridSystemPRAS(; max_active_power) <: GeneratorStoragePRAS
+    HybridSystemPRAS(; max_active_power, add_default_transition_probabilities, outage_probability, recovery_probability) <: GeneratorStoragePRAS
 
 # Arguments
 $(TYPEDFIELDS)
@@ -74,17 +109,26 @@ HybridSystemPRAS produces generatorstorage entries in PRAS.
 struct HybridSystemPRAS <: GeneratorStoragePRAS
     "Name of time series to use for max active power"
     max_active_power::String
+    "Whether to add default outage data"
+    add_default_transition_probabilities::Bool
+    "Name of time series to use for outage_probability"
+    outage_probability::String
+    "Name of time series to use for recovery_probability"
+    recovery_probability::String
 
-    function HybridSystemPRAS(; max_active_power="max_active_power")
-        return new(max_active_power)
+    function HybridSystemPRAS(;
+        max_active_power="max_active_power",
+        add_default_transition_probabilities=false,
+        outage_probability="outage_probability",
+        recovery_probability="recovery_probability",
+    )
+        return new(
+            max_active_power,
+            add_default_transition_probabilities,
+            outage_probability,
+            recovery_probability,
+        )
     end
-end
-
-"""
-Get max active power time series name
-"""
-function get_max_active_power(f::HybridSystemPRAS)
-    return f.max_active_power
 end
 
 """
@@ -100,21 +144,58 @@ struct HydroEnergyReservoirPRAS <: GeneratorStoragePRAS
     inflow::String
     "Name of time series to use for storage capacity"
     storage_capacity::String
+    "Whether to add default outage data"
+    add_default_transition_probabilities::Bool
+    "Name of time series to use for outage_probability"
+    outage_probability::String
+    "Name of time series to use for recovery_probability"
+    recovery_probability::String
 
     function HydroEnergyReservoirPRAS(;
         max_active_power="max_active_power",
         inflow="inflow",
         storage_capacity="storage_capacity",
+        add_default_transition_probabilities=false,
+        outage_probability="outage_probability",
+        recovery_probability="recovery_probability",
     )
-        return new(max_active_power, inflow, storage_capacity)
+        return new(
+            max_active_power,
+            inflow,
+            storage_capacity,
+            add_default_transition_probabilities,
+            outage_probability,
+            recovery_probability,
+        )
     end
 end
 
 """
 Get max active power time series name
 """
-function get_max_active_power(f::HydroEnergyReservoirPRAS)
+function get_max_active_power(f::GeneratorStoragePRAS)
     return f.max_active_power
+end
+
+"""
+Get whether default forced outages needed to be added to generatorstorages
+"""
+function get_add_default_transition_probabilities(f::GeneratorStoragePRAS)
+    return f.add_default_transition_probabilities
+end
+
+"""
+Get outage_probability time series name
+"""
+function get_outage_probability(f::GeneratorStoragePRAS)
+    return f.outage_probability
+end
+
+"""
+Get recovery_probability time series name
+"""
+function get_recovery_probability(f::GeneratorStoragePRAS)
+    return f.recovery_probability
 end
 
 """
@@ -141,11 +222,51 @@ Subtypes must provide [`assign_to_stor_matrices!`](@ref) function.
 abstract type StoragePRAS <: AbstractRAFormulation end
 
 """
-    EnergyReservoirLossless <: StoragePRAS
+    EnergyReservoirSoC <: StoragePRAS
 
-EnergyReservoirLossless is a storage formulation that does not lose energy.
+EnergyReservoirSoC is a storage formulation that keeps track oh state of charge.
 """
-struct EnergyReservoirLossless <: StoragePRAS end
+struct EnergyReservoirSoC <: StoragePRAS
+    "Whether to add default outage data"
+    add_default_transition_probabilities::Bool
+    "Name of time series to use for outage_probability"
+    outage_probability::String
+    "Name of time series to use for recovery_probability"
+    recovery_probability::String
+
+    function EnergyReservoirSoC(;
+        add_default_transition_probabilities=false,
+        outage_probability="outage_probability",
+        recovery_probability="recovery_probability",
+    )
+        return new(
+            add_default_transition_probabilities,
+            outage_probability,
+            recovery_probability,
+        )
+    end
+end
+
+"""
+Get whether default forced outages needed to be added to generatorstorages
+"""
+function get_add_default_transition_probabilities(f::StoragePRAS)
+    return f.add_default_transition_probabilities
+end
+
+"""
+Get outage_probability time series name
+"""
+function get_outage_probability(f::StoragePRAS)
+    return f.outage_probability
+end
+
+"""
+Get recovery_probability time series name
+"""
+function get_recovery_probability(f::StoragePRAS)
+    return f.recovery_probability
+end
 
 """
     InterfacePRAS <: AbstractRAFormulation

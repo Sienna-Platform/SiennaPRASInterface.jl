@@ -56,8 +56,16 @@ function get_generator_category(gen::GEN) where {GEN <: PSY.ThermalGen}
     return string(PSY.get_fuel(gen))
 end
 
-function get_generator_category(gen::GEN) where {GEN <: PSY.HydroGen}
+function get_generator_category(gen::PSY.HydroDispatch)
     return "Hydro"
+end
+
+function get_generator_category(gen::PSY.HydroTurbine)
+    return "HydroReservoir"
+end
+
+function get_generator_category(gen::PSY.HydroPumpTurbine)
+    return "PumpedStorage"
 end
 
 function get_generator_category(stor::GEN) where {GEN <: PSY.Storage}
@@ -101,17 +109,13 @@ function line_rating(line::PSY.MonitoredLine)
     return (forward_capacity=rate.from_to, backward_capacity=rate.to_from)
 end
 
-function line_rating(line::PSY.TwoTerminalHVDCLine)
+function line_rating(line::PSY.TwoTerminalHVDC)
     forward_capacity = PSY.get_active_power_limits_from(line).max
     backward_capacity = PSY.get_active_power_limits_to(line).max
     return (
         forward_capacity=abs(forward_capacity),
         backward_capacity=abs(backward_capacity),
     )
-end
-
-function line_rating(line::DCLine) where {DCLine <: HVDCLineTypes}
-    error("line_rating isn't defined for $(typeof(line))")
 end
 
 """
@@ -135,22 +139,41 @@ function line_type(line::Union{PSY.Line, PSY.MonitoredLine})
     return "ACLine"
 end
 
-function line_type(line::PSY.TwoTerminalHVDCLine)
+function line_type(line::PSY.TwoTerminalGenericHVDCLine)
     return "HVDCLine"
 end
 
-function line_type(line::DCLine) where {DCLine <: HVDCLineTypes}
-    error("line_type isn't defined for $(typeof(line))")
+function line_type(line::PSY.TwoTerminalLCCLine)
+    return "LCC"
+end
+
+function line_type(line::PSY.TwoTerminalVSCLine)
+    return "VSC"
+end
+
+function get_outage_time_series_data(
+    gen::PSY.StaticInjection,
+    s2p_meta::S2P_metadata,
+    formulation::AbstractRAFormulation,
+)
+    return get_outage_time_series_data(
+        gen,
+        s2p_meta,
+        outage_probability_ts_name=get_outage_probability(formulation),
+        recovery_probability_ts_name=get_recovery_probability(formulation),
+    )
 end
 
 function get_outage_time_series_data(
     gen::Union{PSY.StaticInjection, PSY.Branch},
-    s2p_meta::S2P_metadata,
+    s2p_meta::S2P_metadata;
+    outage_probability_ts_name="outage_probability",
+    recovery_probability_ts_name="recovery_probability",
 )
     # Get GeometricForcedOutage SupplementalAttribute of the generator g
     outage_sup_attrs =
         PSY.get_supplemental_attributes(PSY.GeometricDistributionForcedOutage, gen)
-    if (length(outage_sup_attrs) > 0)
+    if !(isempty(outage_sup_attrs))
         transition_data = first(outage_sup_attrs)
         λ = PSY.get_outage_transition_probability(transition_data)
         μ = if (iszero(PSY.get_mean_time_to_recovery(transition_data)))
@@ -159,22 +182,46 @@ function get_outage_time_series_data(
             1 / PSY.get_mean_time_to_recovery(transition_data)
         end
 
-        if (PSY.has_time_series(transition_data, PSY.SingleTimeSeries))
+        if (
+            PSY.has_time_series(
+                transition_data,
+                PSY.SingleTimeSeries,
+                outage_probability_ts_name,
+            ) && PSY.has_time_series(
+                transition_data,
+                PSY.SingleTimeSeries,
+                recovery_probability_ts_name,
+            )
+        )
             return PSY.get_time_series_values(
                 PSY.SingleTimeSeries,
                 transition_data,
-                "outage_probability",
+                outage_probability_ts_name,
             ),
             PSY.get_time_series_values(
                 PSY.SingleTimeSeries,
                 transition_data,
-                "recovery_probability",
+                recovery_probability_ts_name,
             )
         else
+            @warn "GeometricForcedOutage SupplementalAttribute for $(PSY.get_name(gen)) of $(typeof(gen)) does not have time series data for outage and recovery probabilities with time series names ($outage_probability_ts_name, $recovery_probability_ts_name). Using constant values for this component."
             return fill(λ, s2p_meta.N), fill(μ, s2p_meta.N)
         end
     else
         @warn "No GeometricForcedOutage SupplementalAttribute available for $(PSY.get_name(gen)) of $(typeof(gen)). Using nominal outage and recovery probabilities for this component."
         return zeros(Float64, s2p_meta.N), ones(Float64, s2p_meta.N)
     end
+end
+
+function get_turbine_to_reservoir_mapping(sys::PSY.System)
+    turbine_to_reservoir_mapping = Dict{PSY.HydroUnit, PSY.HydroReservoir}()
+    for res in PSY.get_available_components(PSY.HydroReservoir, sys)
+        if iszero(length(res.downstream_turbines))
+            continue
+        end
+        for tur in res.downstream_turbines
+            push!(turbine_to_reservoir_mapping, tur => res)
+        end
+    end
+    return turbine_to_reservoir_mapping
 end

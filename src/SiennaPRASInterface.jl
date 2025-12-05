@@ -52,7 +52,7 @@ export HybridSystemPRAS
 export HydroEnergyReservoirPRAS
 export DeviceRAModel
 export GeneratorStoragePRAS
-export EnergyReservoirLossless
+export EnergyReservoirSoC
 export StoragePRAS
 export LinePRAS
 export AreaInterchangeLimit
@@ -109,7 +109,6 @@ import PRASCore:
 
 import PRASFiles
 
-include("util/definitions.jl")
 include("util/runchecks.jl")
 
 include("util/parsing/Sienna_PRAS_metadata.jl")
@@ -117,12 +116,14 @@ include("util/parsing/lines_and_interfaces.jl")
 include("util/parsing/outage_data_helper_functions.jl")
 include("util/parsing/PRAS_export.jl")
 
+include("formulation_definitions.jl")
+
 include("util/sienna/helper_functions.jl")
 
 include("util/draws/draw_helper_functions.jl")
 include("util/draws/sienna_draws.jl")
 
-include("formulation_definitions.jl")
+include("util/definitions.jl")
 include("PowerSystems2PRAS.jl")
 
 include("util/parsing/result_export_helper_functions.jl")

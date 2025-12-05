@@ -153,6 +153,8 @@ function get_generator_region_indices(
             ),
             collect(keys(nonlumped_gens_to_formula)),
         )
+        # To ensure reproducability when testing
+        sort!(gs, by=g -> g.name)
         push!(gens, gs)
         push!(reg_wind_gens, wind_gs)
         push!(reg_pv_gens, pv_gs)
@@ -220,15 +222,15 @@ function get_storage_region_indices(
     for (idx, region) in enumerate(regions)
         reg_stor_comps =
             get_available_components_in_aggregation_topology(PSY.Storage, sys, region)
-        push!(
-            stors,
-            filter(
-                x ->
-                    haskey(component_to_formulation, x) &&
-                        PSY.IS.get_uuid(x) ∉ s2p_meta.hs_uuids,
-                reg_stor_comps,
-            ),
+        stor = filter(
+            x ->
+                haskey(component_to_formulation, x) &&
+                    PSY.IS.get_uuid(x) ∉ s2p_meta.hs_uuids,
+            reg_stor_comps,
         )
+        # To ensure reproducability when testing
+        sort!(stor, by=s -> s.name)
+        push!(stors, stor)
         idx == 1 ? start_id[idx] = 1 :
         start_id[idx] = start_id[idx - 1] + length(stors[idx - 1])
         region_stor_idxs[idx] = range(start_id[idx], length=length(stors[idx]))
@@ -254,6 +256,8 @@ function get_gen_storage_region_indices(
         reg_gen_stor_comps =
             get_available_components_in_aggregation_topology(PSY.Generator, sys, region)
         gs = filter(x -> haskey(component_to_formulation, x), reg_gen_stor_comps)
+        # To ensure reproducability when testing
+        sort!(gs, by=g -> g.name)
         push!(gen_stors, gs)
         idx == 1 ? start_id[idx] = 1 :
         start_id[idx] = start_id[idx - 1] + length(gen_stors[idx - 1])
@@ -284,13 +288,12 @@ function process_generators(
     component_to_formulation::Dict{PowerSystems.Device, GeneratorPRAS},
     lumped_mapping::Dict{String, Vector{PSY.Device}},
 )
-    if (length(gen) == 0)
-        gen_names = String[]
+    gen_names, gen_categories = if isempty(gen)
+        String[], String[]
     else
-        gen_names = PSY.get_name.(gen)
+        PSY.get_name.(gen), get_generator_category.(gen)
     end
 
-    gen_categories = get_generator_category.(gen)
     n_gen = length(gen_names)
 
     gen_cap_array = Matrix{Int64}(undef, n_gen, s2p_meta.N)
@@ -337,7 +340,11 @@ function process_generators(
             end
         end
 
-        λ_gen[idx, :], μ_gen[idx, :] = get_outage_time_series_data(g, s2p_meta)
+        λ_gen[idx, :], μ_gen[idx, :] = if haskey(lumped_mapping, g.name)
+            get_outage_time_series_data(g, s2p_meta)
+        else
+            get_outage_time_series_data(g, s2p_meta, component_to_formulation[g])
+        end
     end
 
     return PRASCore.Generators{
@@ -347,7 +354,7 @@ function process_generators(
         PRASCore.MW,
     }(
         gen_names,
-        get_generator_category.(gen),
+        gen_categories,
         gen_cap_array,
         λ_gen,
         μ_gen,
@@ -355,7 +362,7 @@ function process_generators(
 end
 
 function assign_to_stor_matrices!(
-    ::EnergyReservoirLossless,
+    ::EnergyReservoirSoC,
     s::PSY.Device,
     s2p_meta::S2P_metadata,
     charge_cap_array,
@@ -384,10 +391,10 @@ function process_storage(
     s2p_meta::S2P_metadata,
     component_to_formulation::Dict{PSY.Device, StoragePRAS},
 )
-    if (length(stor) == 0)
-        stor_names = String[]
+    stor_names, stor_categories = if isempty(stor)
+        String[], String[]
     else
-        stor_names = PSY.get_name.(stor)
+        PSY.get_name.(stor), get_generator_category.(stor)
     end
 
     n_stor = length(stor_names)
@@ -412,7 +419,8 @@ function process_storage(
             view(stor_dischrg_eff_array, idx, :),
         )
 
-        λ_stor[idx, :], μ_stor[idx, :] = get_outage_time_series_data(s, s2p_meta)
+        λ_stor[idx, :], μ_stor[idx, :] =
+            get_outage_time_series_data(s, s2p_meta, component_to_formulation[s])
     end
 
     stor_cryovr_eff = ones(n_stor, s2p_meta.N)   # Not currently available/ defined in PowerSystems
@@ -425,7 +433,7 @@ function process_storage(
         PRASCore.MWh,
     }(
         stor_names,
-        get_generator_category.(stor),
+        stor_categories,
         stor_charge_cap_array,
         stor_discharge_cap_array,
         stor_energy_cap_array,
@@ -447,11 +455,13 @@ function assign_to_gen_stor_matrices!(
     formulation::HybridSystemPRAS,
     g_s::PSY.Device,
     s2p_meta::S2P_metadata,
+    turbine_to_reservoir_mapping::Dict{PSY.HydroUnit, PSY.HydroReservoir},
     charge_cap_array,
     discharge_cap_array,
     inflow_array,
     energy_cap_array,
     gridinj_cap_array,
+    gridwdr_cap_array,
 )
     fill!(
         charge_cap_array,
@@ -463,9 +473,14 @@ function assign_to_gen_stor_matrices!(
     )
     fill!(
         energy_cap_array,
-        floor(Int, PSY.get_state_of_charge_limits(PSY.get_storage(g_s)).max),
+        floor(
+            Int,
+            PSY.storage_level_limits(PSY.get_storage(g_s)).max *
+            PSY.get_storage_capacity(PSY.get_storage(g_s)),
+        ),
     )
     fill!(gridinj_cap_array, floor(Int, PSY.get_output_active_power_limits(g_s).max))
+    fill!(gridwdr_cap_array, floor(Int, PSY.get_input_active_power_limits(g_s).max))
 
     if (PSY.has_time_series(
         PSY.get_renewable_unit(g_s),
@@ -490,35 +505,69 @@ end
 Apply HydroEnergyReservoir Formulation to fill in a row of a PRAS Matrix.
 Views should be passed in for all arrays.
 """
+# Charging to GeneratorStorage is limited by charge_capacity whether from grid or from 
+# inflows. So, that charge_capacity should be at least equal to the inflow timeseries.
+# If other constraints exists (penstock?), and need to represented, this could be represented
+#  as well.
+# Powerflow into grid is limited by grid_injection, which can come from discharge
+# and/or exogenous inflow. gridinjcap should be turbine dispatch limit
+# Discharge capacity can be the turbine dispatch limit or 
+# arbitrarily high because this represents discharge from reservoir to turbine +
+# inflows
+# Energy capacity can be arbitrarily high in the absence of reservoir limit to 
+# ensure month to month energy energy carryover.
+# Gridwithdrawl capacity is limited by pump capacity and eventually also by the 
+# charge capacity
 function assign_to_gen_stor_matrices!(
     formulation::HydroEnergyReservoirPRAS,
     g_s::PSY.Device,
     s2p_meta::S2P_metadata,
+    turbine_to_reservoir_mapping::Dict{PSY.HydroUnit, PSY.HydroReservoir},
     charge_cap_array,
     discharge_cap_array,
     inflow_array,
     energy_cap_array,
     gridinj_cap_array,
+    gridwdr_cap_array,
 )
     if (PSY.has_time_series(g_s))
-        if (PSY.has_time_series(g_s, PSY.SingleTimeSeries, get_inflow(formulation)))
-            charge_cap_array .= get_pras_array_from_timeseries(g_s, get_inflow(formulation))
-            discharge_cap_array .= charge_cap_array
+        if (PSY.has_time_series(
+            turbine_to_reservoir_mapping[g_s],
+            PSY.SingleTimeSeries,
+            get_inflow(formulation),
+        ))
+            charge_cap_array .= get_pras_array_from_timeseries(
+                turbine_to_reservoir_mapping[g_s],
+                get_inflow(formulation),
+            )
             inflow_array .= charge_cap_array
         else
-            fill!(charge_cap_array, floor(Int, PSY.get_inflow(g_s)))
-            fill!(discharge_cap_array, floor(Int, PSY.get_inflow(g_s)))
-            fill!(inflow_array, floor(Int, PSY.get_inflow(g_s)))
+            fill!(
+                charge_cap_array,
+                floor(Int, PSY.get_inflow(turbine_to_reservoir_mapping[g_s])),
+            )
+            fill!(
+                inflow_array,
+                floor(Int, PSY.get_inflow(turbine_to_reservoir_mapping[g_s])),
+            )
         end
         if (PSY.has_time_series(
-            g_s,
+            turbine_to_reservoir_mapping[g_s],
             PSY.SingleTimeSeries,
             get_storage_capacity(formulation),
         ))
-            energy_cap_array .=
-                get_pras_array_from_timeseries(g_s, get_storage_capacity(formulation))
+            energy_cap_array .= get_pras_array_from_timeseries(
+                turbine_to_reservoir_mapping[g_s],
+                get_storage_capacity(formulation),
+            )
         else
-            fill!(energy_cap_array, floor(Int, PSY.get_storage_capacity(g_s)))
+            fill!(
+                energy_cap_array,
+                floor(
+                    Int,
+                    PSY.get_storage_level_limits(turbine_to_reservoir_mapping[g_s]).max,
+                ),
+            )
         end
         if (PSY.has_time_series(
             g_s,
@@ -527,15 +576,28 @@ function assign_to_gen_stor_matrices!(
         ))
             gridinj_cap_array .=
                 get_pras_array_from_timeseries(g_s, get_max_active_power(formulation))
+            discharge_cap_array .= gridinj_cap_array
         else
             fill!(gridinj_cap_array, floor(Int, PSY.get_max_active_power(g_s)))
+            fill!(discharge_cap_array, floor(Int, PSY.get_max_active_power(g_s)))
         end
     else
-        fill!(charge_cap_array, floor(Int, PSY.get_inflow(g_s)))
-        fill!(discharge_cap_array, floor(Int, PSY.get_inflow(g_s)))
-        fill!(energy_cap_array, floor(Int, PSY.get_storage_capacity(g_s)))
-        fill!(inflow_array, floor(Int, PSY.get_inflow(g_s)))
+        fill!(
+            charge_cap_array,
+            floor(Int, PSY.get_inflow(turbine_to_reservoir_mapping[g_s])),
+        )
+        fill!(discharge_cap_array, floor(Int, PSY.get_max_active_power(g_s)))
+        fill!(
+            energy_cap_array,
+            floor(Int, PSY.get_storage_level_limits(turbine_to_reservoir_mapping[g_s]).max),
+        )
+        fill!(inflow_array, floor(Int, PSY.get_inflow(turbine_to_reservoir_mapping[g_s])))
         fill!(gridinj_cap_array, floor(Int, PSY.get_max_active_power(g_s)))
+    end
+    if (isa(g_s, PSY.HydroPumpTurbine))
+        fill!(gridwdr_cap_array, floor(Int, PSY.get_active_power_limits_pump(g_s).max))
+    else
+        gridwdr_cap_array .= zeros(Int64, s2p_meta.N)
     end
 end
 
@@ -547,12 +609,13 @@ Apply GeneratorStoragePRAS to create PRAS matrices for generator storage
 function process_genstorage(
     gen_stor::Array{PSY.Device},
     s2p_meta::S2P_metadata,
-    component_to_formulation::Dict{PSY.Device, GeneratorStoragePRAS},
+    component_to_formulation::Dict{PSY.Device, GeneratorStoragePRAS};
+    turbine_to_reservoir_mapping::Dict{PSY.HydroUnit, PSY.HydroReservoir},
 )
-    if (length(gen_stor) == 0)
-        gen_stor_names = String[]
+    gen_stor_names, gen_stor_categories = if isempty(gen_stor)
+        String[], String[]
     else
-        gen_stor_names = PSY.get_name.(gen_stor)
+        PSY.get_name.(gen_stor), get_generator_category.(gen_stor)
     end
 
     n_genstors = length(gen_stor_names)
@@ -562,6 +625,7 @@ function process_genstorage(
     gen_stor_enrgy_cap_array = Matrix{Int64}(undef, n_genstors, s2p_meta.N)
     gen_stor_inflow_array = Matrix{Int64}(undef, n_genstors, s2p_meta.N)
     gen_stor_gridinj_cap_array = Matrix{Int64}(undef, n_genstors, s2p_meta.N)
+    gen_stor_gridwdr_cap_array = Matrix{Int64}(undef, n_genstors, s2p_meta.N)
 
     λ_genstors = Matrix{Float64}(undef, n_genstors, s2p_meta.N)
     μ_genstors = Matrix{Float64}(undef, n_genstors, s2p_meta.N)
@@ -571,17 +635,20 @@ function process_genstorage(
             component_to_formulation[g_s],
             g_s,
             s2p_meta,
+            turbine_to_reservoir_mapping,
             view(gen_stor_charge_cap_array, idx, :),
             view(gen_stor_discharge_cap_array, idx, :),
             view(gen_stor_inflow_array, idx, :),
             view(gen_stor_enrgy_cap_array, idx, :),
             view(gen_stor_gridinj_cap_array, idx, :),
+            view(gen_stor_gridwdr_cap_array, idx, :),
         )
 
-        λ_genstors[idx, :], μ_genstors[idx, :] = get_outage_time_series_data(g_s, s2p_meta)
+        λ_genstors[idx, :], μ_genstors[idx, :] =
+            get_outage_time_series_data(g_s, s2p_meta, component_to_formulation[g_s])
     end
 
-    gen_stor_gridwdr_cap_array = zeros(Int64, n_genstors, s2p_meta.N) # Not currently available/ defined in PowerSystems
+    # Not currently available/ defined in PowerSystems
     gen_stor_charge_eff = ones(n_genstors, s2p_meta.N)                # Not currently available/ defined in PowerSystems
     gen_stor_discharge_eff = ones(n_genstors, s2p_meta.N)             # Not currently available/ defined in PowerSystems
     gen_stor_cryovr_eff = ones(n_genstors, s2p_meta.N)                # Not currently available/ defined in PowerSystems
@@ -594,7 +661,7 @@ function process_genstorage(
         PRASCore.MWh,
     }(
         gen_stor_names,
-        get_generator_category.(gen_stor),
+        gen_stor_categories,
         gen_stor_charge_cap_array,
         gen_stor_discharge_cap_array,
         gen_stor_enrgy_cap_array,
@@ -635,14 +702,10 @@ function process_lines(
     s2p_meta::S2P_metadata,
     lines_to_formulation::Dict{PSY.Device, LinePRAS},
 )
-    num_lines = length(sorted_lines)
-    if num_lines == 0
-        line_names = String[]
-    else
-        line_names = PSY.get_name.(sorted_lines)
-    end
     # Lines
-    line_cats = line_type.(sorted_lines)
+    num_lines = length(sorted_lines)
+    line_names = (num_lines == 0) ? String[] : PSY.get_name.(sorted_lines)
+    line_cats = (num_lines == 0) ? String[] : line_type.(sorted_lines)
 
     line_forward_cap = Matrix{Int64}(undef, num_lines, s2p_meta.N)
     line_backward_cap = Matrix{Int64}(undef, num_lines, s2p_meta.N)
@@ -800,7 +863,7 @@ function generate_pras_system(
     outages = PSY.get_supplemental_attributes(PSY.GeometricDistributionForcedOutage, sys)
 
     # If no GeometricDistributionForcedOutage objects exist, add them to relevant components in the System
-    if (outages.length == 0)
+    if isempty(outages)
         add_default_data!(sys)
     end
     #######################################################
@@ -809,16 +872,15 @@ function generate_pras_system(
     # TODO: Is it okay to assume each System will have a
     # SingleTimeSeries?
     #######################################################
-    #
-    static_ts_summary = PSY.get_static_time_series_summary_table(sys)
-
     # Ensure Sienna/Data System has static time series
-    if isempty(static_ts_summary)
+    ts_counts = PSY.get_time_series_counts(sys)
+    if iszero(ts_counts.static_time_series_count)
         error(
             "System doesn't have any StaticTimeSeries. Other TimeSeries types are not suitable for resource adequacy analysis.",
         )
     end
 
+    static_ts_summary = PSY.get_static_time_series_summary_table(sys)
     s2p_meta = S2P_metadata(static_ts_summary)
 
     start_datetime_tz = TimeZones.ZonedDateTime(s2p_meta.first_timestamp, TimeZones.tz"UTC")
@@ -864,6 +926,20 @@ function generate_pras_system(
         build_component_to_formulation(GeneratorPRAS, sys, template.device_models)
     gens, region_gen_idxs, lumped_mapping =
         get_generator_region_indices(sys, s2p_meta, regions, gens_to_formula)
+
+    # Add SupplementalAttribute if get_add_default_transition_probabilities is true
+    # Ignoring lumped generators here because they don't need the attribute added
+    for g in gens
+        haskey(lumped_mapping, g.name) && continue
+        if (
+            get_add_default_transition_probabilities(gens_to_formula[g]) && isempty(
+                PSY.get_supplemental_attributes(PSY.GeometricDistributionForcedOutage, g),
+            )
+        )
+            PSY.add_supplemental_attribute!(sys, g, DEFAULT_OUTAGE_DATA_SUPP_ATTR)
+        end
+    end
+
     new_generators = process_generators(gens, s2p_meta, gens_to_formula, lumped_mapping)
 
     # **TODO Future : time series for storage devices
@@ -872,6 +948,18 @@ function generate_pras_system(
         build_component_to_formulation(StoragePRAS, sys, template.device_models)
     stors, region_stor_idxs =
         get_storage_region_indices(sys, s2p_meta, regions, stors_to_formula)
+
+    # Add SupplementalAttribute if get_add_default_transition_probabilities is true
+    for s in stors
+        if (
+            get_add_default_transition_probabilities(stors_to_formula[s]) && isempty(
+                PSY.get_supplemental_attributes(PSY.GeometricDistributionForcedOutage, s),
+            )
+        )
+            PSY.add_supplemental_attribute!(sys, s, DEFAULT_OUTAGE_DATA_SUPP_ATTR)
+        end
+    end
+
     new_storage = process_storage(stors, s2p_meta, stors_to_formula)
 
     # **TODO Consider all combinations of HybridSystem (Currently only works for DER+ESS)
@@ -880,7 +968,26 @@ function generate_pras_system(
         build_component_to_formulation(GeneratorStoragePRAS, sys, template.device_models)
     gen_stors, region_genstor_idxs =
         get_gen_storage_region_indices(sys, regions, gen_stors_to_formula)
-    new_gen_stors = process_genstorage(gen_stors, s2p_meta, gen_stors_to_formula)
+
+    # Add SupplementalAttribute if get_add_default_transition_probabilities is true
+    for g_s in gen_stors
+        if (
+            get_add_default_transition_probabilities(gen_stors_to_formula[g_s]) && isempty(
+                PSY.get_supplemental_attributes(PSY.GeometricDistributionForcedOutage, g_s),
+            )
+        )
+            PSY.add_supplemental_attribute!(sys, g_s, DEFAULT_OUTAGE_DATA_SUPP_ATTR)
+        end
+    end
+
+    # Turbine to Reservoir Mapping
+    turbine_to_reservoir_mapping = get_turbine_to_reservoir_mapping(sys)
+    new_gen_stors = process_genstorage(
+        gen_stors,
+        s2p_meta,
+        gen_stors_to_formula,
+        turbine_to_reservoir_mapping=turbine_to_reservoir_mapping,
+    )
 
     #######################################################
     # Network
@@ -900,6 +1007,8 @@ function generate_pras_system(
                 keys(lines_to_formulation),
             ),
         )
+        # To ensure reproducability when testing
+        sort!(lines, by=l -> l.name)
         # Sorting here let's us better control the interface/line link
         sorted_lines, interface_reg_idxs, interface_line_idxs =
             get_sorted_lines(lines, PSY.get_name.(regions))
@@ -968,27 +1077,29 @@ end
 const DEFAULT_DEVICE_MODELS = [
     DeviceRAModel(PSY.Line, LinePRAS),
     DeviceRAModel(PSY.MonitoredLine, LinePRAS),
-    DeviceRAModel(PSY.TwoTerminalHVDCLine, LinePRAS),
+    DeviceRAModel(PSY.TwoTerminalGenericHVDCLine, LinePRAS),
     DeviceRAModel(PSY.StaticLoad, StaticLoadPRAS),
     DeviceRAModel(PSY.ThermalGen, GeneratorPRAS),
     DeviceRAModel(PSY.RenewableGen, GeneratorPRAS),
     DeviceRAModel(PSY.HydroDispatch, GeneratorPRAS),
-    DeviceRAModel(PSY.EnergyReservoirStorage, EnergyReservoirLossless),
+    DeviceRAModel(PSY.EnergyReservoirStorage, EnergyReservoirSoC),
     DeviceRAModel(PSY.HybridSystem, HybridSystemPRAS),
-    DeviceRAModel(PSY.HydroEnergyReservoir, HydroEnergyReservoirPRAS),
+    DeviceRAModel(PSY.HydroTurbine, HydroEnergyReservoirPRAS),
+    DeviceRAModel(PSY.HydroPumpTurbine, HydroEnergyReservoirPRAS),
 ]
 
 const _LUMPED_RENEWABLE_DEVICE_MODELS = [
     DeviceRAModel(PSY.Line, LinePRAS),
     DeviceRAModel(PSY.MonitoredLine, LinePRAS),
-    DeviceRAModel(PSY.TwoTerminalHVDCLine, LinePRAS),
+    DeviceRAModel(PSY.TwoTerminalGenericHVDCLine, LinePRAS),
     DeviceRAModel(PSY.StaticLoad, StaticLoadPRAS),
     DeviceRAModel(PSY.ThermalGen, GeneratorPRAS),
     DeviceRAModel(PSY.RenewableGen, GeneratorPRAS, lump_renewable_generation=true),
     DeviceRAModel(PSY.HydroDispatch, GeneratorPRAS),
-    DeviceRAModel(PSY.EnergyReservoirStorage, EnergyReservoirLossless),
+    DeviceRAModel(PSY.EnergyReservoirStorage, EnergyReservoirSoC),
     DeviceRAModel(PSY.HybridSystem, HybridSystemPRAS),
-    DeviceRAModel(PSY.HydroEnergyReservoir, HydroEnergyReservoirPRAS),
+    DeviceRAModel(PSY.HydroTurbine, HydroEnergyReservoirPRAS),
+    DeviceRAModel(PSY.HydroPumpTurbine, HydroEnergyReservoirPRAS),
 ]
 
 const DEFAULT_TEMPLATE = RATemplate(PSY.Area, DEFAULT_DEVICE_MODELS)

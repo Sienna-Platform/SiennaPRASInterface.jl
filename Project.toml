@@ -1,7 +1,7 @@
 name = "SiennaPRASInterface"
 uuid = "4b496c86-8d00-441d-b504-079c710e0aa7"
 authors = ["Surya Chandan Dhulipala, Joseph McKinsey, Jose Daniel Lara"]
-version = "1.0.2"
+version = "1.1"
 
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
@@ -27,8 +27,8 @@ DocStringExtensions = "^0.9"
 JSON = ">= 0.21"
 PRASCore = ">= 0.7"
 PRASFiles = ">= 0.7"
-InfrastructureSystems = "3.0.0"
-PowerSystems = "5.0.1"
+InfrastructureSystems = "~3"
+PowerSystems = "~5"
 Random = "1"
 Random123 = "1"
 TimeSeries = "0.25"

@@ -288,7 +288,7 @@ function process_generators(
     component_to_formulation::Dict{PowerSystems.Device, GeneratorPRAS},
     lumped_mapping::Dict{String, Vector{PSY.Device}},
 )
-    gen_names, gen_categories = if (length(gen) == 0)
+    gen_names, gen_categories = if isempty(gen)
         String[], String[]
     else
         PSY.get_name.(gen), get_generator_category.(gen)
@@ -391,7 +391,7 @@ function process_storage(
     s2p_meta::S2P_metadata,
     component_to_formulation::Dict{PSY.Device, StoragePRAS},
 )
-    stor_names, stor_categories = if (length(stor) == 0)
+    stor_names, stor_categories = if isempty(stor)
         String[], String[]
     else
         PSY.get_name.(stor), get_generator_category.(stor)
@@ -455,7 +455,7 @@ function assign_to_gen_stor_matrices!(
     formulation::HybridSystemPRAS,
     g_s::PSY.Device,
     s2p_meta::S2P_metadata,
-    turbine_to_reservoir_mapping::Union{Nothing, Dict{PSY.HydroUnit, PSY.HydroReservoir}},
+    turbine_to_reservoir_mapping::Dict{PSY.HydroUnit, PSY.HydroReservoir},
     charge_cap_array,
     discharge_cap_array,
     inflow_array,
@@ -522,7 +522,7 @@ function assign_to_gen_stor_matrices!(
     formulation::HydroEnergyReservoirPRAS,
     g_s::PSY.Device,
     s2p_meta::S2P_metadata,
-    turbine_to_reservoir_mapping::Union{Nothing, Dict{PSY.HydroUnit, PSY.HydroReservoir}},
+    turbine_to_reservoir_mapping::Dict{PSY.HydroUnit, PSY.HydroReservoir},
     charge_cap_array,
     discharge_cap_array,
     inflow_array,
@@ -610,9 +610,9 @@ function process_genstorage(
     gen_stor::Array{PSY.Device},
     s2p_meta::S2P_metadata,
     component_to_formulation::Dict{PSY.Device, GeneratorStoragePRAS};
-    turbine_to_reservoir_mapping::Union{Nothing, Dict{PSY.HydroUnit, PSY.HydroReservoir}}=nothing,
+    turbine_to_reservoir_mapping::Dict{PSY.HydroUnit, PSY.HydroReservoir},
 )
-    gen_stor_names, gen_stor_categories = if (length(gen_stor) == 0)
+    gen_stor_names, gen_stor_categories = if isempty(gen_stor)
         String[], String[]
     else
         PSY.get_name.(gen_stor), get_generator_category.(gen_stor)

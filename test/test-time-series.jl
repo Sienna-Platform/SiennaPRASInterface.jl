@@ -21,7 +21,7 @@
     # Access Results
     eue = SiennaPRASInterface.val(SiennaPRASInterface.EUE(shortfall))
     lole = SiennaPRASInterface.val(SiennaPRASInterface.LOLE(shortfall))
-    @test (eue - 98817.85) < 200000
+    @test (eue - 296000) < 10
     @test (lole - 450) < 10
 end
 

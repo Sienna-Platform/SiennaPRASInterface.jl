@@ -103,7 +103,7 @@ function get_region_loads(
     aggregation = Dict(region => i for (i, region) in enumerate(regions))
 
     for (load, formulation) in loads_to_formulations
-        index = aggregation[PSY.get_area(PSY.get_bus(load))]
+        index = aggregation[get_aggregation_function(region)(PSY.get_bus(load))]
         add_to_load_matrix!(formulation, load, s2p_meta, view(region_load, index, :))
     end
     return floor.(Int, region_load)

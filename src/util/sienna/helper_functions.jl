@@ -3,11 +3,11 @@
 
 Get getter function based on PSY.AggregationTopology
 """
-function get_aggregation_function(reg::PSY.Area)
+function get_aggregation_function(reg::Type{PSY.Area})
     return PSY.get_area
 end
 
-function get_aggregation_function(reg::PSY.LoadZone)
+function get_aggregation_function(reg::Type{PSY.LoadZone})
     return PSY.get_load_zone
 end
 """

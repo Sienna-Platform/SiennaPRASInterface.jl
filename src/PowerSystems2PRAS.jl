@@ -98,12 +98,13 @@ function get_region_loads(
     s2p_meta::S2P_metadata,
     regions,
     loads_to_formulations::Dict{PSY.Device, LoadPRAS},
-)
+    aggregation_type::Type{T},
+) where {T <: PSY.AggregationTopology}
     region_load = zeros(Float64, length(regions), s2p_meta.N)
     aggregation = Dict(region => i for (i, region) in enumerate(regions))
 
     for (load, formulation) in loads_to_formulations
-        index = aggregation[get_aggregation_function(region)(PSY.get_bus(load))]
+        index = aggregation[get_aggregation_function(aggregation_type)(PSY.get_bus(load))]
         add_to_load_matrix!(formulation, load, s2p_meta, view(region_load, index, :))
     end
     return floor.(Int, region_load)
@@ -134,20 +135,20 @@ function get_generator_region_indices(
         wind_gs = filter(
             x -> (
                 (PSY.get_prime_mover_type(x) == PSY.PrimeMovers.WT) &&
-                (get_aggregation_function(region)(x.bus) == region)
+                (get_aggregation_function(typeof(region))(x.bus) == region)
             ),
             collect(keys(lumped_gens_to_formula)),
         )
         pv_gs = filter(
             x -> (
                 (PSY.get_prime_mover_type(x) == PSY.PrimeMovers.PVe) &&
-                (get_aggregation_function(region)(x.bus) == region)
+                (get_aggregation_function(typeof(region))(x.bus) == region)
             ),
             collect(keys(lumped_gens_to_formula)),
         )
         gs = filter(
             x -> (
-                (get_aggregation_function(region)(x.bus) == region) &&
+                (get_aggregation_function(typeof(region))(x.bus) == region) &&
                 !(iszero(PSY.get_max_active_power(x))) &&
                 PSY.IS.get_uuid(x) ∉ s2p_meta.hs_uuids
             ),
@@ -917,7 +918,8 @@ function generate_pras_system(
     end
 
     loads_to_formula = build_component_to_formulation(LoadPRAS, sys, template.device_models)
-    region_load = get_region_loads(s2p_meta, regions, loads_to_formula)
+    region_load =
+        get_region_loads(s2p_meta, regions, loads_to_formula, template.aggregation)
     new_regions =
         PRASCore.Regions{s2p_meta.N, PRASCore.MW}(PSY.get_name.(regions), region_load)
 

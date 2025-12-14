@@ -3,14 +3,19 @@
 
 Get sorted (reg_from, reg_to) tuples of inter-regional lines.
 """
-function get_sorted_region_tuples(lines::Vector{PSY.Branch}, region_names::Vector{String})
+function get_sorted_region_tuples(
+    lines::Vector{PSY.Branch},
+    region_names::Vector{String},
+    aggregation::Type{T},
+) where {T <: PSY.AggregationTopology}
     region_idxs = Dict(name => idx for (idx, name) in enumerate(region_names))
 
     line_from_to_reg_idxs = similar(lines, Tuple{Int, Int})
 
     for (l, line) in enumerate(lines)
-        from_name = PSY.get_name(PSY.get_area(PSY.get_from_bus(line)))
-        to_name = PSY.get_name(PSY.get_area(PSY.get_to_bus(line)))
+        from_name =
+            PSY.get_name(get_aggregation_function(aggregation)(PSY.get_from_bus(line)))
+        to_name = PSY.get_name(get_aggregation_function(aggregation)(PSY.get_to_bus(line)))
 
         from_idx = region_idxs[from_name]
         to_idx = region_idxs[to_name]
@@ -38,8 +43,12 @@ Get sorted lines, interface region indices, and interface line indices.
   - `interface_reg_idxs::Vector{Tuple{Int, Int}}`: Interface region indices
   - `interface_line_idxs::Vector{UnitRange{Int}}`: Interface line indices
 """
-function get_sorted_lines(lines::Vector{PSY.Branch}, region_names::Vector{String})
-    line_from_to_reg_idxs = get_sorted_region_tuples(lines, region_names)
+function get_sorted_lines(
+    lines::Vector{PSY.Branch},
+    region_names::Vector{String},
+    aggregation::Type{T},
+) where {T <: PSY.AggregationTopology}
+    line_from_to_reg_idxs = get_sorted_region_tuples(lines, region_names, aggregation)
     line_ordering = sortperm(line_from_to_reg_idxs)
 
     sorted_lines = lines[line_ordering]

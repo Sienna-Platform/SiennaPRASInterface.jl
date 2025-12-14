@@ -1005,7 +1005,13 @@ function generate_pras_system(
         lines = collect(
             PSY.Branch,
             filter(
-                x -> !(x.arc.from.area.name == x.arc.to.area.name),
+                x -> !(
+                    PSY.get_name(
+                        get_aggregation_function(template.aggregation)(x.arc.from),
+                    ) == PSY.get_name(
+                        get_aggregation_function(template.aggregation)(x.arc.to),
+                    )
+                ),
                 keys(lines_to_formulation),
             ),
         )
@@ -1013,7 +1019,7 @@ function generate_pras_system(
         sort!(lines, by=l -> l.name)
         # Sorting here let's us better control the interface/line link
         sorted_lines, interface_reg_idxs, interface_line_idxs =
-            get_sorted_lines(lines, PSY.get_name.(regions))
+            get_sorted_lines(lines, PSY.get_name.(regions), template.aggregation)
         @assert length(sorted_lines) == length(lines)
         @assert length(interface_reg_idxs) == length(interface_line_idxs)  # num_interfaces
         @assert sum(length.(interface_line_idxs)) == length(lines)

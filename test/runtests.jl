@@ -14,7 +14,6 @@ using Dates: DateTime
 const PSY = PowerSystems
 const PSCB = PowerSystemCaseBuilder
 
-#include("rts_gmlc.jl")
 include("comparison_utils.jl")
 
 # Need to define this before PSCB changes are merged

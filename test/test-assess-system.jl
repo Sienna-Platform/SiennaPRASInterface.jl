@@ -8,8 +8,8 @@ function test_shortfalls(shortfalls)
     @test SiennaPRASInterface.val(lole) >= 0 && SiennaPRASInterface.val(lole) <= 10
     @test SiennaPRASInterface.stderror(lole) >= 0 &&
           SiennaPRASInterface.stderror(lole) <= 10
-    @test SiennaPRASInterface.val(eue) >= 0 && SiennaPRASInterface.val(eue) <= 50
-    @test SiennaPRASInterface.stderror(eue) >= 0 && SiennaPRASInterface.stderror(eue) <= 50
+    @test SiennaPRASInterface.val(eue) >= 0 && SiennaPRASInterface.val(eue) <= 10
+    @test SiennaPRASInterface.stderror(eue) >= 0 && SiennaPRASInterface.stderror(eue) <= 10
 end
 
 @testset "test assess(::PSY.System, ::Area, ...) Hourly PRAS System" begin

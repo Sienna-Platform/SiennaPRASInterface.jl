@@ -60,6 +60,7 @@ export StaticLoadPRAS
 export set_device_model!
 export RATemplate
 
+export run_hydro_planning
 #################################################################################
 # Imports
 #################################################################################

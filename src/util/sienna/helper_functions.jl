@@ -225,3 +225,9 @@ function get_turbine_to_reservoir_mapping(sys::PSY.System)
     end
     return turbine_to_reservoir_mapping
 end
+
+function run_hydro_planning(sys::PSY.System)
+    error(
+        "To use run_hydro_planning, you must first load HydroPowerSimulations.jl via `using HydroPowerSimulations`.",
+    )
+end

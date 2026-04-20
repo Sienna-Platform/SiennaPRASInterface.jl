@@ -9,7 +9,7 @@
 
 SiennaPRASInterface.jl is a Julia package that provides an interface to (the unregistered package) [PRAS.jl](https://nrel.github.io/PRAS/) employing PowerSystem.jl's System data model. This package facilitates executing and analyzing the resource adequacy of a bulk power system using Monte Carlo methods with Julia.
 
-For information on using the package check the [documentation]([https://sienna-platform.github.io/PowerSystems.jl/dev/](https://sienna-platform.github.io/SiennaPRASInterface.jl/dev)).
+For information on using the package check the [documentation](https://sienna-platform.github.io/SiennaPRASInterface.jl/dev).
 
 ## Development
 

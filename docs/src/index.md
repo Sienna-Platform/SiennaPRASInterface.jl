@@ -6,7 +6,7 @@ CurrentModule = SiennaPRASInterface
 
 ## About
 
-`SiennaPRASInterface.jl` is a [`Julia`](http://www.julialang.org) package that provides an interface to [`PRAS.jl`](https://nrel.github.io/PRAS) from [Sienna](https://www.nrel.gov/analysis/sienna.html)'s [`PowerSystem.jl`](https://github.com/NREL-Sienna/PowerSystems.jl)'s `System` data model.
+`SiennaPRASInterface.jl` is a [`Julia`](http://www.julialang.org) package that provides an interface to [`PRAS.jl`](https://nrel.github.io/PRAS) from [Sienna](https://www.nrel.gov/analysis/sienna.html)'s [`PowerSystem.jl`](https://github.com/Sienna-Platform/PowerSystems.jl)'s `System` data model.
 
 The Probabilistic Resource Adequacy Suite (PRAS) analyzes the resource adequacy of a bulk power system using Monte Carlo methods.
 
@@ -22,7 +22,7 @@ To use `SiennaPRASInterface.jl`, you first need a `System` from `PowerSystems.jl
 
 ### 2. Add Data
 
-Add outage information to generators using the supplemental attribute [`GeometricDistributionForcedOutage`](https://nrel-sienna.github.io/PowerSystems.jl/stable/api/public/#PowerSystems.GeometricDistributionForcedOutage).
+Add outage information to generators using the supplemental attribute [`GeometricDistributionForcedOutage`](https://sienna-platform.github.io/PowerSystems.jl/stable/api/public/#PowerSystems.GeometricDistributionForcedOutage).
 
 ```julia
 using PowerSystems

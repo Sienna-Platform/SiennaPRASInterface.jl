@@ -13,7 +13,7 @@ For information on using the package check the [documentation]([https://sienna-p
 
 ## Development
 
-Contributions to the development and enahancement of SiennaPRASInterface is welcome. Please see [CONTRIBUTING.md](https://github.com/Sienna-Platform/SiennaPRASInterface.jl/blob/master/CONTRIBUTING.md) for code contribution guidelines.
+Contributions to the development and enhancement of SiennaPRASInterface is welcome. Please see [CONTRIBUTING.md](https://github.com/Sienna-Platform/SiennaPRASInterface.jl/blob/master/CONTRIBUTING.md) for code contribution guidelines.
 
 ## License
 

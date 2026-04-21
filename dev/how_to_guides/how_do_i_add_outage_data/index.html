@@ -5,7 +5,7 @@ transition_data = GeometricDistributionForcedOutage(;
     mean_time_to_recovery=10,  # Units of hours
     outage_transition_probability=0.005,  # Probability for outage per hour
 )
-transition_data</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">GeometricDistributionForcedOutage: daae7c29-f98d-456b-8f2e-285b4bc65301:
+transition_data</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">GeometricDistributionForcedOutage: 0f1af19b-b567-4617-be70-5b3b6860e907:
    mean_time_to_recovery: 10.0
    outage_transition_probability: 0.005
    has_time_series: false</code></pre><h2 id="Step-2-:-Attaching-Data-to-Components"><a class="docs-heading-anchor" href="#Step-2-:-Attaching-Data-to-Components">Step 2 : Attaching Data to Components</a><a id="Step-2-:-Attaching-Data-to-Components-1"></a><a class="docs-heading-anchor-permalink" href="#Step-2-:-Attaching-Data-to-Components" title="Permalink"></a></h2><p>Once you have a <code>GeometricDistributionForcedOutage</code> object, then you can add it to any components with that data:</p><pre><code class="language-julia hljs">component = get_component(Generator, sys, &quot;101_CT_1&quot;)
@@ -55,7 +55,7 @@ recovery_time_series =
 # Here we assume you have a system named sys
 add_time_series!(sys, transition_data, outage_time_series)
 add_time_series!(sys, transition_data, recovery_time_series)
-transition_data</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">GeometricDistributionForcedOutage: daae7c29-f98d-456b-8f2e-285b4bc65301:
+transition_data</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">GeometricDistributionForcedOutage: 0f1af19b-b567-4617-be70-5b3b6860e907:
    mean_time_to_recovery: 10.0
    outage_transition_probability: 0.005
    has_time_series: true</code></pre><h2 id="Step-4-:-Run-simulations-and-verify-result"><a class="docs-heading-anchor" href="#Step-4-:-Run-simulations-and-verify-result">Step 4 : Run simulations and verify result</a><a id="Step-4-:-Run-simulations-and-verify-result-1"></a><a class="docs-heading-anchor-permalink" href="#Step-4-:-Run-simulations-and-verify-result" title="Permalink"></a></h2><pre><code class="language- hljs">using SiennaPRASInterface

@@ -1,7 +1,7 @@
 # How do I add outage data to Sienna?
 
 You can attach outage data to `PowerSystems` `Components` by using the
-supplemental attribute [`GeometricDistributionForcedOutage`](https://nrel-sienna.github.io/PowerSystems.jl/stable/api/public/#PowerSystems.GeometricDistributionForcedOutage).
+supplemental attribute [`GeometricDistributionForcedOutage`](https://sienna-platform.github.io/PowerSystems.jl/stable/api/public/#PowerSystems.GeometricDistributionForcedOutage).
 
 ## Step 1 : Parse your outage data into Sienna
 
@@ -44,7 +44,7 @@ component
 Time series should be attached to a `GeometricDistributionForcedOutage` object
 under the keys `recovery_probability` (1/`mean_time_to_recovery`) and `outage_probability`.
 
-See the [Sienna time-series documentation on working with time-series](https://nrel-sienna.github.io/PowerSystems.jl/stable/tutorials/working_with_time_series/).
+See the [Sienna time-series documentation on working with time-series](https://sienna-platform.github.io/PowerSystems.jl/stable/tutorials/working_with_time_series/).
 
 ```@example 1
 using Dates

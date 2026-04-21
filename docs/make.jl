@@ -21,14 +21,14 @@ makedocs(
         prettyurls=haskey(ENV, "GITHUB_ACTIONS"),
         size_threshold=nothing,
     ),
-    sitename="github.com/NREL-Sienna/SiennaPRASInterface.jl",
+    sitename="github.com/Sienna-Platform/SiennaPRASInterface.jl",
     authors="Surya Dhulipala, Joseph McKinsey, José Daniel Lara",
     pages=Any[p for p in pages],
     warnonly=true,
 )
 
 deploydocs(
-    repo="github.com/NREL-Sienna/SiennaPRASInterface.jl.git",
+    repo="github.com/Sienna-Platform/SiennaPRASInterface.jl.git",
     target="build",
     branch="gh-pages",
     devbranch="main",

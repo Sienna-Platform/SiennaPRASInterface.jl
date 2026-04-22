@@ -1037,6 +1037,10 @@ function generate_pras_system(
             )
         end
 
+        attrs = Dict{String, String}()
+        !(isnothing(sys.metadata.name)) && (attrs["name"] = sys.metadata.name)
+        !(isnothing(sys.metadata.description)) && (attrs["description"] = sys.metadata.description)
+
         pras_system = PRASCore.SystemModel(
             new_regions,
             interfaces,
@@ -1049,6 +1053,7 @@ function generate_pras_system(
             new_lines,
             interface_line_idxs,
             my_timestamps,
+            attrs,
         )
 
         @info "Successfully built a PRAS SystemModel of type $(typeof(pras_system))."
@@ -1064,6 +1069,7 @@ function generate_pras_system(
             new_gen_stors,
             my_timestamps,
             load_vector,
+            attrs,
         )
 
         @info "Successfully built a PRAS SystemModel of type $(typeof(pras_system))."

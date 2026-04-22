@@ -1,7 +1,7 @@
 name = "SiennaPRASInterface"
 uuid = "4b496c86-8d00-441d-b504-079c710e0aa7"
 authors = ["Surya Chandan Dhulipala, Joseph McKinsey, Jose Daniel Lara"]
-version = "1.1.0"
+version = "1.1.1"
 
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"

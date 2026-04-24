@@ -3,6 +3,7 @@ const OUTAGE_RESULT_SPEC = PRASCore.Results.ResultSpec[
     GeneratorAvailability(),
     StorageAvailability(),
     GeneratorStorageAvailability(),
+    SurplusSamples()
 ]
 
 """
@@ -49,6 +50,8 @@ struct SPIOutageResult
     stor_availability::PRASCore.Results.StorageAvailabilityResult
     "GeneratorStorage Availability Result"
     gen_stor_availability::PRASCore.Results.GeneratorStorageAvailabilityResult
+    "Surplus Sample Result"
+    surplus_samples::PRASCore.Results.SurplusSamplesResult
 end
 
 function SPIOutageResult(results::T) where {T <: Tuple{Vararg{PRASCore.Results.Result}}}

@@ -17,4 +17,4 @@ Contributions to the development and enhancement of SiennaPRASInterface is welco
 
 ## License
 
-SiennaPRASInterface is released under a BSD [license](https://github.com/NREL/SiennaPRASInterface/blob/master/LICENSE). SiennaPRASInterface has been developed as part of the transmission planning tools project at the U.S. Department of Energy's National Laboratory of the Rockies [NLR](https://www.nlr.gov/) formerly known as NREL.
+SiennaPRASInterface is released under a BSD [license](https://github.com/Sienna-Platform/SiennaPRASInterface/blob/main/LICENSE). SiennaPRASInterface has been developed as part of the transmission planning tools project at the U.S. Department of Energy's National Laboratory of the Rockies [NLR](https://www.nlr.gov/) formerly known as NREL.

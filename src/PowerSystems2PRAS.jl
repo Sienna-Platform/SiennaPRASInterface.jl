@@ -98,13 +98,13 @@ function get_region_loads(
     s2p_meta::S2P_metadata,
     regions,
     loads_to_formulations::Dict{PSY.Device, LoadPRAS},
-    aggregation::Type{T}
+    aggregation_type::Type{T}
 ) where {T <: PSY.AggregationTopology}
     region_load = zeros(Float64, length(regions), s2p_meta.N)
     aggregation = Dict(region => i for (i, region) in enumerate(regions))
 
     for (load, formulation) in loads_to_formulations
-        index = aggregation[get_aggregation_function(aggregation)(PSY.get_bus(load))]
+        index = aggregation[get_aggregation_function(aggregation_type)(PSY.get_bus(load))]
         add_to_load_matrix!(formulation, load, s2p_meta, view(region_load, index, :))
     end
     return floor.(Int, region_load)
